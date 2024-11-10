@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
+#include "kernels.h"
 
 #include <cmath>
 #include <fstream>
@@ -14,27 +15,6 @@ using namespace std;
 #define MIN_POINTS 5
 #define MIN_DISTANCE 5
 
-struct Point
-{
-    int x, y;
-
-    Point(int xc, int yc) : x(xc), y(yc) {}
-};
-
-struct Grid
-{
-    Grid *bottom_left, *bottom_right, *top_left, *top_right;
-    Point *points;
-
-    // Initialize the corresponding Point values
-    Grid(Grid *bl, Grid *br, Grid *tl, Grid *tr, Point *ps)
-        : bottom_left(bl),
-          bottom_right(br),
-          top_left(tl),
-          top_right(tr),
-          points(ps) {}
-};
-
 struct Quad_point_info
 {
     Point *quadrant_start_ptr;
@@ -42,127 +22,10 @@ struct Quad_point_info
     pair<int, int> region_bl;
     pair<int, int> region_tr;
     Quad_point_info(Point *qp, int count, pair<int, int> r_bl, pair<int, int> r_tr) : quadrant_start_ptr(qp),
-                                                    count_in_quadrant(count),
-                                                    region_bl(r_bl),
-                                                    region_tr(r_tr) {}
+                                                                                      count_in_quadrant(count),
+                                                                                      region_bl(r_bl),
+                                                                                      region_tr(r_tr) {}
 };
-
-__global__ void categorize_points(Point *d_points, int *d_categories,
-                                  int *grid_counts, int count, int range,
-                                  int middle_x, int middle_y)
-{
-    // subgrid_counts declared outside kernel, Dynamic Shared Memory
-    // Accessed using extern
-    extern __shared__ int subgrid_counts[];
-
-    int start = ((blockIdx.x * blockDim.x) + threadIdx.x) * range;
-
-    // Initialize the subgrid counts to 0
-    if (threadIdx.x == 0)
-    {
-        subgrid_counts[0] = 0;
-        subgrid_counts[1] = 0;
-        subgrid_counts[2] = 0;
-        subgrid_counts[3] = 0;
-    }
-    __syncthreads();
-
-    int first = 0, second = 0, third = 0, fourth = 0;
-    for (int i = start; i < start + range; i++)
-    {
-        if (i < count)
-        {
-            // bottom left; if the point lies in bottom left, increment
-            if (d_points[i].x <= middle_x and d_points[i].y <= middle_y)
-            {
-                d_categories[i] = 0;
-                first++;
-            }
-            // bottom right; if point lies in bottom right, increment
-            else if (d_points[i].x > middle_x and d_points[i].y <= middle_y)
-            {
-                d_categories[i] = 1;
-                second++;
-            }
-            // top left; if point lies in top left, increment
-            else if (d_points[i].x <= middle_x and d_points[i].y > middle_y)
-            {
-                d_categories[i] = 2;
-                third++;
-            }
-            // top right; if point lies in top right, increment
-            else if (d_points[i].x > middle_x and d_points[i].y > middle_y)
-            {
-                d_categories[i] = 3;
-                fourth++;
-            }
-        }
-    }
-
-    // CUDA built in function to perform atomic addition at given location
-    // Location : first variable
-    // Store the counts of points in their respective subgrid
-    atomicAdd(&subgrid_counts[0], first);
-    atomicAdd(&subgrid_counts[1], second);
-    atomicAdd(&subgrid_counts[2], third);
-    atomicAdd(&subgrid_counts[3], fourth);
-    __syncthreads();
-
-    // Add the values of subgrid_counts to grid_counts
-    if (threadIdx.x == 0)
-    {
-        atomicAdd(&grid_counts[0], subgrid_counts[0]);
-        atomicAdd(&grid_counts[1], subgrid_counts[1]);
-        atomicAdd(&grid_counts[2], subgrid_counts[2]);
-        atomicAdd(&grid_counts[3], subgrid_counts[3]);
-    }
-}
-
-__global__ void organize_points(Point *d_points, int *d_categories, Point *bl,
-                                Point *br, Point *tl, Point *tr, int count,
-                                int range)
-{
-    extern __shared__ int subgrid_index[];
-
-    // Initialize subgrid pointer to 0
-    // Used to index the point arrays for each subgrid
-    if (threadIdx.x == 0)
-    {
-        subgrid_index[0] = 0;
-        subgrid_index[1] = 0;
-        subgrid_index[2] = 0;
-        subgrid_index[3] = 0;
-    }
-    __syncthreads();
-
-    int start = threadIdx.x * range;
-    for (int i = start; i < start + range; i++)
-    {
-        if (i < count)
-        {
-            // Point array will store the respective points in a contiguous
-            // fashion increment subgrid index according to the category
-            unsigned int category_index =
-                atomicAdd(&subgrid_index[d_categories[i]], 1);
-            if (d_categories[i] == 0)
-            {
-                bl[category_index] = d_points[i];
-            }
-            if (d_categories[i] == 1)
-            {
-                br[category_index] = d_points[i];
-            }
-            if (d_categories[i] == 2)
-            {
-                tl[category_index] = d_points[i];
-            }
-            if (d_categories[i] == 3)
-            {
-                tr[category_index] = d_points[i];
-            }
-        }
-    }
-}
 
 void quadtree_grid(Point *points, int count,
                    pair<int, int> bottom_left_corner,
@@ -196,7 +59,7 @@ void quadtree_grid(Point *points, int count,
 
     // Copy the point data into device
     cudaMemcpyAsync(d_points, points, count * sizeof(Point),
-               cudaMemcpyHostToDevice, stream);
+                    cudaMemcpyHostToDevice, stream);
 
     // Set the number of blocks and threads per block
     int range, num_blocks = 16, threads_per_block = 256;
@@ -220,9 +83,9 @@ void quadtree_grid(Point *points, int count,
 
     // Get back the data from device to host
     cudaMemcpyAsync(h_categories.data(), d_categories, count * sizeof(int),
-               cudaMemcpyDeviceToHost, stream);
+                    cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(h_grid_counts.data(), d_grid_counts, 4 * sizeof(int),
-               cudaMemcpyDeviceToHost, stream);
+                    cudaMemcpyDeviceToHost, stream);
 
     int total = 0;
     // printf("%d: Point counts per sub grid - \n", level);
@@ -267,13 +130,13 @@ void quadtree_grid(Point *points, int count,
 
     // Shift the data from device to host
     cudaMemcpyAsync(bl, bottom_left, h_grid_counts[0] * sizeof(Point),
-               cudaMemcpyDeviceToHost, stream);
+                    cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(br, bottom_right, h_grid_counts[1] * sizeof(Point),
-               cudaMemcpyDeviceToHost, stream);
+                    cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(tl, top_left, h_grid_counts[2] * sizeof(Point),
-               cudaMemcpyDeviceToHost, stream);
+                    cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(tr, top_right, h_grid_counts[3] * sizeof(Point),
-               cudaMemcpyDeviceToHost, stream);
+                    cudaMemcpyDeviceToHost, stream);
 
     quad_q->push(Quad_point_info(bl, h_grid_counts[0], mp(x1, y1), mp(middle_x, middle_y)));
     quad_q->push(Quad_point_info(br, h_grid_counts[1], mp(middle_x, y1), mp(x2, middle_y)));
@@ -292,32 +155,31 @@ void quadtree_grid(Point *points, int count,
     return;
 }
 
-void build_quadtree_levels(Point *points, int point_count, queue<Quad_point_info> *quad_q)
+void build_quadtree_levels(Point *points, int point_count, queue<Quad_point_info> *quad_q, pair<int, int> bl, pair<int, int> tr)
 {
 
-    // limit stream to 32 but even then not gauranteed that perormance will be good becaus eof the limited number of SMs
-    // limit by 4
+    // According to GPU documentations, 32 is the limit to the number of streams 
+    // but performance can not be gauranteed to be better with that many streams because of the limited number of SMs
+    // We limit our streams to 4 right now
     double time_taken;
     clock_t start, end;
-
-    pair<int, int> initial_bl = mp(0, 0);
-    pair<int, int> initial_tr = mp(1000, 1000);
-    // Quad initial_grid = Quad(initial_bl, initial_tr);
     start = clock();
-    quadtree_grid(points, point_count, initial_bl, initial_tr, nullptr, quad_q);
+    quadtree_grid(points, point_count, bl, tr, nullptr, quad_q);
     while (!quad_q->empty())
     {
         // start 4 streams at a time, one for each bl, br, tl, tr points
         int batch = 4;
         cudaStream_t streams[batch];
-        // Initialize each stream to nullptr
-        for (int i = 0; i < batch; ++i) {
+        // Initialize each stream to nullptr so that we don't get segmentation faults if we exit the grid creation early
+        for (int i = 0; i < batch; ++i)
+        {
             streams[i] = nullptr;
         }
 
         for (int i = 0; i < batch; i++)
         {
-            if (quad_q->empty()) break;
+            if (quad_q->empty())
+                break;
 
             Quad_point_info quad_point_info = quad_q->front();
             quad_q->pop();
@@ -336,10 +198,10 @@ void build_quadtree_levels(Point *points, int point_count, queue<Quad_point_info
 
         for (int i = 0; i < 4; i++)
         {
-            if(streams[i] != nullptr){
+            if (streams[i] != nullptr)
+            {
                 cudaStreamDestroy(streams[i]);
             }
-            
         }
     }
 
@@ -348,8 +210,26 @@ void build_quadtree_levels(Point *points, int point_count, queue<Quad_point_info
     printf("Time taken = %lf\n", time_taken);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    int initial_bl_fi;
+    int initial_bl_se;
+    int initial_tr_fi;
+    int initial_tr_se;
+
+    if (argc != 5)
+    {
+        fprintf(stderr, "usage: grid bl=(initial_bottom_left, initial_bottom_left) and grid tr=(initial_top_right, initial_top_right) \n");
+        fprintf(stderr, "inital bottom left point must be mentioned (as a two space-sepaarted ints) \n");
+        fprintf(stderr, "inital top right point must be mentioned (as a two space-sepaarted ints) \n");
+        exit(1);
+    }
+
+    initial_bl_fi = (unsigned int)atoi(argv[1]);
+    initial_bl_se = (unsigned int)atoi(argv[2]);
+    initial_tr_fi = (unsigned int)atoi(argv[3]);
+    initial_tr_se = (unsigned int)atoi(argv[4]);
+
     string filename = "points.txt";
     vector<Point> points;
     int point_count = 0;
@@ -381,6 +261,6 @@ int main()
 
     file.close();
     queue<Quad_point_info> quad_q;
-    build_quadtree_levels(&points[0], point_count, &quad_q);
+    build_quadtree_levels(&points[0], point_count, &quad_q, mp(initial_bl_fi, initial_bl_se), mp(initial_tr_fi, initial_tr_se));
     return 0;
 }
