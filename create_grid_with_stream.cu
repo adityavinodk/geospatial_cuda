@@ -7,6 +7,7 @@
 #include <sstream>
 #include <vector>
 #include <time.h>
+#include <thread>
 using namespace std;
 
 #define mp make_pair
@@ -53,9 +54,9 @@ void quadtree_grid(Point *points, int count,
     vector<int> h_grid_counts(4);
 
     // Allocate memory to the pointers
-    cudaMalloc(&d_points, count * sizeof(Point));
-    cudaMalloc(&d_categories, count * sizeof(int));
-    cudaMalloc(&d_grid_counts, 4 * sizeof(int));
+    cudaMallocAsync(&d_points, count * sizeof(Point), stream);
+    cudaMallocAsync(&d_categories, count * sizeof(int), stream);
+    cudaMallocAsync(&d_grid_counts, 4 * sizeof(int), stream);
 
     // Copy the point data into device
     cudaMemcpyAsync(d_points, points, count * sizeof(Point),
@@ -103,10 +104,10 @@ void quadtree_grid(Point *points, int count,
     // Declare arrays for each section of the grid and allocate memory depending
     // on the number of points found
     Point *bottom_left, *bottom_right, *top_left, *top_right;
-    cudaMalloc(&bottom_left, h_grid_counts[0] * sizeof(Point));
-    cudaMalloc(&bottom_right, h_grid_counts[1] * sizeof(Point));
-    cudaMalloc(&top_left, h_grid_counts[2] * sizeof(Point));
-    cudaMalloc(&top_right, h_grid_counts[3] * sizeof(Point));
+    cudaMallocAsync(&bottom_left, h_grid_counts[0] * sizeof(Point), stream);
+    cudaMallocAsync(&bottom_right, h_grid_counts[1] * sizeof(Point), stream);
+    cudaMallocAsync(&top_left, h_grid_counts[2] * sizeof(Point), stream);
+    cudaMallocAsync(&top_right, h_grid_counts[3] * sizeof(Point), stream);
 
     dim3 grid2(1, 1, 1);
     dim3 block2(threads_per_block, 1, 1);
@@ -144,13 +145,13 @@ void quadtree_grid(Point *points, int count,
     quad_q->push(Quad_point_info(tr, h_grid_counts[3], mp(middle_x, middle_y), mp(x2, y2)));
 
     // Free data
-    cudaFree(d_points);
-    cudaFree(d_categories);
-    cudaFree(d_grid_counts);
-    cudaFree(bottom_left);
-    cudaFree(bottom_right);
-    cudaFree(top_left);
-    cudaFree(top_right);
+    cudaFreeAsync(d_points, stream);
+    cudaFreeAsync(d_categories, stream);
+    cudaFreeAsync(d_grid_counts, stream);
+    cudaFreeAsync(bottom_left, stream);
+    cudaFreeAsync(bottom_right, stream);
+    cudaFreeAsync(top_left, stream);
+    cudaFreeAsync(top_right, stream);
 
     return;
 }
@@ -158,7 +159,7 @@ void quadtree_grid(Point *points, int count,
 void build_quadtree_levels(Point *points, int point_count, queue<Quad_point_info> *quad_q, pair<int, int> bl, pair<int, int> tr)
 {
 
-    // According to GPU documentations, 32 is the limit to the number of streams 
+    // According to GPU documentations, 32 is the limit to the number of streams
     // but performance can not be gauranteed to be better with that many streams because of the limited number of SMs
     // We limit our streams to 4 right now
     double time_taken;
