@@ -35,22 +35,16 @@ struct Grid
           points(ps) {}
 };
 
-struct Quad
-{
-    pair<int, int> bl;
-    pair<int, int> tr;
-    Quad(const std::pair<int, int> &bottom_left, const std::pair<int, int> &top_right)
-        : bl(bottom_left), tr(top_right) {}
-};
-
 struct Quad_point_info
 {
     Point *quadrant_start_ptr;
     int count_in_quadrant;
-    Quad region;
-    Quad_point_info(Point *qp, int count, Quad r) : quadrant_start_ptr(qp),
+    pair<int, int> region_bl;
+    pair<int, int> region_tr;
+    Quad_point_info(Point *qp, int count, pair<int, int> r_bl, pair<int, int> r_tr) : quadrant_start_ptr(qp),
                                                     count_in_quadrant(count),
-                                                    region(r) {}
+                                                    region_bl(r_bl),
+                                                    region_tr(r_tr) {}
 };
 
 __global__ void categorize_points(Point *d_points, int *d_categories,
@@ -201,8 +195,8 @@ void quadtree_grid(Point *points, int count,
     cudaMalloc(&d_grid_counts, 4 * sizeof(int));
 
     // Copy the point data into device
-    cudaMemcpy(d_points, points, count * sizeof(Point),
-               cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_points, points, count * sizeof(Point),
+               cudaMemcpyHostToDevice, stream);
 
     // Set the number of blocks and threads per block
     int range, num_blocks = 16, threads_per_block = 256;
@@ -225,10 +219,10 @@ void quadtree_grid(Point *points, int count,
         middle_y);
 
     // Get back the data from device to host
-    cudaMemcpy(h_categories.data(), d_categories, count * sizeof(int),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_grid_counts.data(), d_grid_counts, 4 * sizeof(int),
-               cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(h_categories.data(), d_categories, count * sizeof(int),
+               cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(h_grid_counts.data(), d_grid_counts, 4 * sizeof(int),
+               cudaMemcpyDeviceToHost, stream);
 
     int total = 0;
     // printf("%d: Point counts per sub grid - \n", level);
@@ -272,19 +266,19 @@ void quadtree_grid(Point *points, int count,
     tr = (Point *)malloc(h_grid_counts[3] * sizeof(Point));
 
     // Shift the data from device to host
-    cudaMemcpy(bl, bottom_left, h_grid_counts[0] * sizeof(Point),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(br, bottom_right, h_grid_counts[1] * sizeof(Point),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(tl, top_left, h_grid_counts[2] * sizeof(Point),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(tr, top_right, h_grid_counts[3] * sizeof(Point),
-               cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(bl, bottom_left, h_grid_counts[0] * sizeof(Point),
+               cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(br, bottom_right, h_grid_counts[1] * sizeof(Point),
+               cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(tl, top_left, h_grid_counts[2] * sizeof(Point),
+               cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(tr, top_right, h_grid_counts[3] * sizeof(Point),
+               cudaMemcpyDeviceToHost, stream);
 
-    quad_q->push(Quad_point_info(bl, h_grid_counts[0], Quad(mp(x1, y1), mp(middle_x, middle_y))));
-    quad_q->push(Quad_point_info(br, h_grid_counts[1], Quad(mp(middle_x, y1), mp(x2, middle_y))));
-    quad_q->push(Quad_point_info(tl, h_grid_counts[2], Quad(mp(x1, middle_y), mp(middle_x, y2))));
-    quad_q->push(Quad_point_info(tr, h_grid_counts[3], Quad(mp(middle_x, middle_y), mp(x2, y2))));
+    quad_q->push(Quad_point_info(bl, h_grid_counts[0], mp(x1, y1), mp(middle_x, middle_y)));
+    quad_q->push(Quad_point_info(br, h_grid_counts[1], mp(middle_x, y1), mp(x2, middle_y)));
+    quad_q->push(Quad_point_info(tl, h_grid_counts[2], mp(x1, middle_y), mp(middle_x, y2)));
+    quad_q->push(Quad_point_info(tr, h_grid_counts[3], mp(middle_x, middle_y), mp(x2, y2)));
 
     // Free data
     cudaFree(d_points);
@@ -308,30 +302,33 @@ void build_quadtree_levels(Point *points, int point_count, queue<Quad_point_info
 
     pair<int, int> initial_bl = mp(0, 0);
     pair<int, int> initial_tr = mp(1000, 1000);
-    Quad initial_grid = Quad(initial_bl, initial_tr);
+    // Quad initial_grid = Quad(initial_bl, initial_tr);
     start = clock();
     quadtree_grid(points, point_count, initial_bl, initial_tr, nullptr, quad_q);
     while (!quad_q->empty())
     {
         // start 4 streams at a time, one for each bl, br, tl, tr points
-        cudaStream_t streams[4] = {nullptr, nullptr, nullptr, nullptr};
-        for (int i = 0; i < 4; i++)
+        int batch = 4;
+        cudaStream_t streams[batch];
+        // Initialize each stream to nullptr
+        for (int i = 0; i < batch; ++i) {
+            streams[i] = nullptr;
+        }
+
+        for (int i = 0; i < batch; i++)
         {
             if (quad_q->empty()) break;
 
             Quad_point_info quad_point_info = quad_q->front();
             quad_q->pop();
 
-            int x1 = quad_point_info.region.bl.fi, y1 = quad_point_info.region.bl.se,
-                x2 = quad_point_info.region.tr.fi, y2 = quad_point_info.region.tr.se;
+            int x1 = quad_point_info.region_bl.fi, y1 = quad_point_info.region_bl.se,
+                x2 = quad_point_info.region_tr.fi, y2 = quad_point_info.region_tr.se;
             if (!(quad_point_info.count_in_quadrant < MIN_POINTS or (abs(x1 - x2) < MIN_DISTANCE and abs(y1 - y2) < MIN_DISTANCE)))
             {
                 cudaStreamCreate(&(streams[i]));
                 printf("Stream %d created \n", i);
-                quadtree_grid(quad_point_info.quadrant_start_ptr, quad_point_info.count_in_quadrant, quad_point_info.region.bl, quad_point_info.region.tr, streams[i], quad_q);
-            }
-            else{
-
+                quadtree_grid(quad_point_info.quadrant_start_ptr, quad_point_info.count_in_quadrant, quad_point_info.region_bl, quad_point_info.region_tr, streams[i], quad_q);
             }
         }
 
@@ -385,8 +382,5 @@ int main()
     file.close();
     queue<Quad_point_info> quad_q;
     build_quadtree_levels(&points[0], point_count, &quad_q);
-
-    // quadtree_grid(points, point_count, mp(0, 0), mp(1000, 1000));
-
     return 0;
 }
