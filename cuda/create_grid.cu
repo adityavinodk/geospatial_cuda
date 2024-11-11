@@ -1,6 +1,6 @@
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
-#include <kernels.h>
+#include "kernels.h"
 
 #include <cmath>
 #include <fstream>
@@ -15,15 +15,19 @@ using namespace std;
 #define MIN_DISTANCE 5.0
 
 Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_corner,
-					pair<float, float> top_right_corner, int level) {
+					pair<float, float> top_right_corner, int level,
+					Grid *parent, int id, vector<QuadrantBoundary> &boundaries)
+{
 	float x1 = bottom_left_corner.fi, y1 = bottom_left_corner.se,
-		x2 = top_right_corner.fi, y2 = top_right_corner.se;
+		  x2 = top_right_corner.fi, y2 = top_right_corner.se;
 
-	if (count < MIN_POINTS or
-		(abs(x1 - x2) < MIN_DISTANCE and abs(y1 - y2) < MIN_DISTANCE)) {
-			pair<float, float> upperBound = make_pair(x2, y2);
-			pair<float, float> lowerBound = make_pair(x1, y1);
-			return new Grid(nullptr, nullptr, nullptr, nullptr, points, upperBound, lowerBound, count);
+	boundaries.push_back({id, bottom_left_corner, top_right_corner});
+
+	if (count < MIN_POINTS or (abs(x1 - x2) < MIN_DISTANCE and abs(y1 - y2) < MIN_DISTANCE))
+	{
+		pair<float, float> upperBound = make_pair(x2, y2);
+		pair<float, float> lowerBound = make_pair(x1, y1);
+		return new Grid(nullptr, nullptr, nullptr, nullptr, points, upperBound, lowerBound, count, parent, id);
 	}
 
 	printf("%d: Creating grid from (%f,%f) to (%f,%f) for %d points\n", level,
@@ -139,19 +143,61 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	// bl, br, tl, tr and store in Grid struct
 	Grid *bl_grid, *tl_grid, *br_grid, *tr_grid;
 	bl_grid = quadtree_grid(bl, h_grid_counts[0], bottom_left_corner,
-							mp(middle_x, middle_y), level + 1);
+							mp(middle_x, middle_y), level + 1, nullptr, id * 4 + 1, boundaries);
 	br_grid = quadtree_grid(br, h_grid_counts[1], mp(middle_x, y1),
-							mp(x1, middle_y), level + 1);
+							mp(x2, middle_y), level + 1, nullptr, id * 4 + 2, boundaries);
 	tl_grid = quadtree_grid(tl, h_grid_counts[2], mp(x1, middle_y),
-							mp(middle_x, y2), level + 1);
+							mp(middle_x, y2), level + 1, nullptr, id * 4 + 3, boundaries);
 	tr_grid = quadtree_grid(tr, h_grid_counts[3], mp(middle_x, middle_y),
-							top_right_corner, level + 1);
+							top_right_corner, level + 1, nullptr, id * 4 + 4, boundaries);
 
-	// The bounds of the grid
 	pair<float, float> upperBound = make_pair(x2, y2);
 	pair<float, float> lowerBound = make_pair(x1, y1);
 
-	return new Grid(bl_grid, br_grid, tl_grid, tr_grid, points, upperBound, lowerBound, count);
+	Grid *root_grid = new Grid(bl_grid, br_grid, tl_grid, tr_grid, points, upperBound, lowerBound, count, parent, id);
+
+	if (bl_grid)
+		bl_grid->parent = root_grid;
+	if (br_grid)
+		br_grid->parent = root_grid;
+	if (tl_grid)
+		tl_grid->parent = root_grid;
+	if (tr_grid)
+		tr_grid->parent = root_grid;
+
+	return root_grid;
+}
+
+int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
+{
+	// Prepare for GPU search
+	QuadrantBoundary *d_boundaries;
+	cudaMalloc(&d_boundaries, boundaries.size() * sizeof(QuadrantBoundary));
+	cudaMemcpy(d_boundaries, boundaries.data(), boundaries.size() * sizeof(QuadrantBoundary), cudaMemcpyHostToDevice);
+
+	Point *d_target_point;
+	cudaMalloc(&d_target_point, sizeof(Point));
+	cudaMemcpy(d_target_point, &target_point, sizeof(Point), cudaMemcpyHostToDevice);
+
+	int *d_result;
+	cudaMalloc(&d_result, sizeof(int));
+
+	int init_value = INT_MAX;
+	cudaMemcpy(d_result, &init_value, sizeof(int), cudaMemcpyHostToDevice);
+
+	int block_size = 256;
+	int num_blocks = 16;
+	quadrant_search<<<num_blocks, block_size>>>(d_target_point, d_boundaries, boundaries.size(), d_result);
+
+	int result;
+	cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+
+	// Free GPU memory
+	cudaFree(d_boundaries);
+	cudaFree(d_target_point);
+	cudaFree(d_result);
+
+	return (result == INT_MAX) ? -1 : result; // Return -1 if point not found in any quadrant
 }
 
 int main(int argc, char *argv[]) {
@@ -187,21 +233,48 @@ int main(int argc, char *argv[]) {
 
 	file.close();
 
-	Point *points_array = (Point *)malloc(point_count * sizeof(Point));
-	for (int i = 0; i < point_count; i++) {
-		points_array[i] = points[i];
-	}
-	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0.0, 0.0), mp(max_size, max_size), 0);
+	Point *points_array = points.data();
+	vector<QuadrantBoundary> boundaries;
+	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0, 0), mp(max_size, max_size), 0, nullptr, 0, boundaries);
 
-	printf("Validating grid...\n");
-	pair<float, float> lowerBound = make_pair(0.0, 0.0);
-	pair<float, float> upperBound = make_pair(max_size, max_size);
-	bool check = validateGrid(root_grid, upperBound, lowerBound);
-	
-	if(check == true)
-		printf("Grid Verification Success!\n");
+	// Test Search
+	Point target_point(10, 20);
+
+	int quadrant_id = search_quadrant(target_point, boundaries);
+
+	// Use the result to search in the specific quadrant
+	Grid *current_grid = root_grid;
+	while (current_grid->id != quadrant_id)
+	{
+		if (quadrant_id % 4 == 1)
+			current_grid = current_grid->bottom_left;
+		else if (quadrant_id % 4 == 2)
+			current_grid = current_grid->bottom_right;
+		else if (quadrant_id % 4 == 3)
+			current_grid = current_grid->top_left;
+		else
+			current_grid = current_grid->top_right;
+	}
+
+	// Search for the point in the identified quadrant
+	bool found = false;
+	for (int i = 0; i < current_grid->count; i++)
+	{
+		if (current_grid->points[i].x == target_point.x && current_grid->points[i].y == target_point.y)
+		{
+			found = true;
+			break;
+		}
+	}
+
+	if (found)
+	{
+		printf("Point found in quadrant with ID: %d\n", quadrant_id);
+	}
 	else
-		printf("Grid Verification Failure!\n");
+	{
+		printf("Point not found in the grid.\n");
+	}
 
 	return 0;
 }
