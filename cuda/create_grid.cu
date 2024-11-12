@@ -245,8 +245,10 @@ void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &bo
 	}
 
 	// Check if the count exceeds MIN_POINTS; if so, split the quadrant
-	if (target_grid->count > MIN_POINTS)
+	printf("The target grid point count is: %d \n", target_grid->count);
+	if (target_grid->count >= MIN_POINTS)
 	{
+		printf("The target grid exceeds the min point limit and needs to be further subdivided \n\n");
 		vector<QuadrantBoundary> new_boundaries;
 		quadtree_grid(target_grid->points, target_grid->count, target_grid->bottomLeft,
 					  target_grid->topRight, 0, target_grid->parent, quadrant_id, new_boundaries, grid_map);
