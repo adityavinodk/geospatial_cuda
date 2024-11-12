@@ -137,8 +137,9 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	cudaFree(top_left);
 	cudaFree(top_right);
 
-	printf("\n\n");
+	printf("\n");
 
+	printf("The current parent id is: %d \n\n", id);
 	// Recursively call the quadtree grid function on each of the 4 sub grids -
 	// bl, br, tl, tr and store in Grid struct
 	Grid *bl_grid, *tl_grid, *br_grid, *tr_grid;
@@ -164,40 +165,66 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 		tl_grid->parent = root_grid;
 	if (tr_grid)
 		tr_grid->parent = root_grid;
+	
+	
 
 	return root_grid;
 }
 
+// int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
+// {
+// 	// Prepare for GPU search
+// 	QuadrantBoundary *d_boundaries;
+// 	cudaMalloc(&d_boundaries, boundaries.size() * sizeof(QuadrantBoundary));
+// 	cudaMemcpy(d_boundaries, boundaries.data(), boundaries.size() * sizeof(QuadrantBoundary), cudaMemcpyHostToDevice);
+
+// 	Point *d_target_point;
+// 	cudaMalloc(&d_target_point, sizeof(Point));
+// 	cudaMemcpy(d_target_point, &target_point, sizeof(Point), cudaMemcpyHostToDevice);
+
+// 	int *d_result;
+// 	cudaMalloc(&d_result, sizeof(int));
+
+// 	int init_value = -1;
+// 	cudaMemcpy(d_result, &init_value, sizeof(int), cudaMemcpyHostToDevice);
+
+// 	int block_size = 256;
+// 	int num_blocks = 16;
+// 	quadrant_search<<<num_blocks, block_size>>>(d_target_point, d_boundaries, boundaries.size(), d_result);
+
+// 	int result;
+// 	cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+
+// 	// Free GPU memory
+// 	cudaFree(d_boundaries);
+// 	cudaFree(d_target_point);
+// 	cudaFree(d_result);
+
+// 	return (result == -1) ? -1 : result; // Return -1 if point not found in any quadrant
+// }
+
 int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
 {
-	// Prepare for GPU search
-	QuadrantBoundary *d_boundaries;
-	cudaMalloc(&d_boundaries, boundaries.size() * sizeof(QuadrantBoundary));
-	cudaMemcpy(d_boundaries, boundaries.data(), boundaries.size() * sizeof(QuadrantBoundary), cudaMemcpyHostToDevice);
+	int deepest_id = 0; // Start with the root quadrant
 
-	Point *d_target_point;
-	cudaMalloc(&d_target_point, sizeof(Point));
-	cudaMemcpy(d_target_point, &target_point, sizeof(Point), cudaMemcpyHostToDevice);
+	for (const auto &boundary : boundaries)
+	{
+		// Check if the point is within this quadrant
+		if (target_point.x >= boundary.bottom_left.first &&
+			target_point.x <= boundary.top_right.first &&
+			target_point.y >= boundary.bottom_left.second &&
+			target_point.y <= boundary.top_right.second)
+		{
 
-	int *d_result;
-	cudaMalloc(&d_result, sizeof(int));
+			// Update the deepest_id if this quadrant is deeper (has a larger ID)
+			if (boundary.id > deepest_id)
+			{
+				deepest_id = boundary.id;
+			}
+		}
+	}
 
-	int init_value = INT_MAX;
-	cudaMemcpy(d_result, &init_value, sizeof(int), cudaMemcpyHostToDevice);
-
-	int block_size = 256;
-	int num_blocks = 16;
-	quadrant_search<<<num_blocks, block_size>>>(d_target_point, d_boundaries, boundaries.size(), d_result);
-
-	int result;
-	cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-
-	// Free GPU memory
-	cudaFree(d_boundaries);
-	cudaFree(d_target_point);
-	cudaFree(d_result);
-
-	return (result == INT_MAX) ? -1 : result; // Return -1 if point not found in any quadrant
+	return deepest_id;
 }
 
 int main(int argc, char *argv[]) {
@@ -238,43 +265,53 @@ int main(int argc, char *argv[]) {
 	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0, 0), mp(max_size, max_size), 0, nullptr, 0, boundaries);
 
 	// Test Search
-	Point target_point(10, 20);
+	Point target_point(8973, 5411);
 
 	int quadrant_id = search_quadrant(target_point, boundaries);
+	printf("The quadrant boundaries size %d \n", boundaries.size());
+	
+	printf("The quadrant id for the target point is: %d \n", quadrant_id);
 
 	// Use the result to search in the specific quadrant
-	Grid *current_grid = root_grid;
-	while (current_grid->id != quadrant_id)
-	{
-		if (quadrant_id % 4 == 1)
-			current_grid = current_grid->bottom_left;
-		else if (quadrant_id % 4 == 2)
-			current_grid = current_grid->bottom_right;
-		else if (quadrant_id % 4 == 3)
-			current_grid = current_grid->top_left;
-		else
-			current_grid = current_grid->top_right;
+	if(quadrant_id == -1){
+		printf("The point doesn't exist in the grid");
 	}
-
-	// Search for the point in the identified quadrant
-	bool found = false;
-	for (int i = 0; i < current_grid->count; i++)
-	{
-		if (current_grid->points[i].x == target_point.x && current_grid->points[i].y == target_point.y)
+	
+	else{
+		Grid *current_grid = root_grid;
+		while (current_grid->id != quadrant_id)
 		{
-			found = true;
-			break;
+			if (quadrant_id % 4 == 1)
+				current_grid = current_grid->bottom_left;
+			else if (quadrant_id % 4 == 2)
+				current_grid = current_grid->bottom_right;
+			else if (quadrant_id % 4 == 3)
+				current_grid = current_grid->top_left;
+			else
+				current_grid = current_grid->top_right;
+		}
+
+		// Search for the point in the identified quadrant
+		bool found = false;
+		for (int i = 0; i < current_grid->count; i++)
+		{
+			if (current_grid->points[i].x == target_point.x && current_grid->points[i].y == target_point.y)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (found)
+		{
+			printf("Point found in quadrant with ID: %d\n", quadrant_id);
+		}
+		else
+		{
+			printf("Point not found in the grid.\n");
 		}
 	}
-
-	if (found)
-	{
-		printf("Point found in quadrant with ID: %d\n", quadrant_id);
-	}
-	else
-	{
-		printf("Point not found in the grid.\n");
-	}
+	
 
 	return 0;
 }

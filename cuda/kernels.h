@@ -11,9 +11,10 @@ struct Point {
 struct QuadrantBoundary
 {
 	int id;
-	std::pair<float, float> top_right;
 	std::pair<float, float> bottom_left;
-}
+	std::pair<float, float> top_right;
+
+};
 
 struct Grid
 {
