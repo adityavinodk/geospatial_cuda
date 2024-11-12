@@ -202,32 +202,9 @@ int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundari
 	return (result == -1) ? -1 : result; // Return -1 if point not found in any quadrant
 }
 
-// int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
-// {
-// 	int deepest_id = 0; // Start with the root quadrant
-
-// 	for (const auto &boundary : boundaries)
-// 	{
-// 		// Check if the point is within this quadrant
-// 		if (target_point.x >= boundary.bottom_left.first &&
-// 			target_point.x <= boundary.top_right.first &&
-// 			target_point.y >= boundary.bottom_left.second &&
-// 			target_point.y <= boundary.top_right.second)
-// 		{
-
-// 			// Update the deepest_id if this quadrant is deeper (has a larger ID)
-// 			if (boundary.id > deepest_id)
-// 			{
-// 				deepest_id = boundary.id;
-// 			}
-// 		}
-// 	}
-
-// 	return deepest_id;
-// }
 Grid *findQuadrantById(Grid *root_grid, int quadrant_id)
 {
-	// Define a stack or path vector to hold the directions (e.g., 0 for bottom_left, 1 for bottom_right, etc.)
+	// Path vector to hold the directions ( 0 for bottom_left, 1 for bottom_right, 2 for top_left, 3 for top_right)
 	vector<int> path;
 
 	// Calculate path from root to target quadrant by repeatedly dividing quadrant_id by 4.
