@@ -9,12 +9,7 @@ struct Point
 	Point(float xc, float yc) : x(xc), y(yc) {}
 };
 
-struct QuadrantBoundary
-{
-	int id;
-	std::pair<float, float> bottom_left;
-	std::pair<float, float> top_right;
-};
+
 
 struct Grid
 {
@@ -44,6 +39,14 @@ struct Grid
 		  count(c),
 		  parent(p),
 		  id(i) {}
+};
+
+struct QuadrantBoundary
+{
+	int id;
+	std::pair<float, float> bottom_left;
+	std::pair<float, float> top_right;
+	Grid *parent;
 };
 
 __global__ void categorize_points(Point *d_points, int *d_categories,
