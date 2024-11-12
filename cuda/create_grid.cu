@@ -81,12 +81,14 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 
 	int total = 0;
 	printf("%d: Point counts per sub grid - \n", level);
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 4; i++)
+	{
 		printf("sub grid %d - %d\n", i + 1, h_grid_counts[i]);
 		total += h_grid_counts[i];
 	}
 	printf("Total Count - %d\n", count);
-	if (total == count) {
+	if (total == count)
+	{
 		printf("Sum of sub grid counts matches total point count\n");
 	}
 
@@ -144,13 +146,13 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	// bl, br, tl, tr and store in Grid struct
 	Grid *bl_grid, *tl_grid, *br_grid, *tr_grid;
 	bl_grid = quadtree_grid(bl, h_grid_counts[0], bottom_left_corner,
-							mp(middle_x, middle_y), level + 1, nullptr, id * 4 + 1, boundaries);
+							mp(middle_x, middle_y), level + 1, nullptr, id * 4, boundaries);
 	br_grid = quadtree_grid(br, h_grid_counts[1], mp(middle_x, y1),
-							mp(x2, middle_y), level + 1, nullptr, id * 4 + 2, boundaries);
+							mp(x2, middle_y), level + 1, nullptr, id * 4 + 1, boundaries);
 	tl_grid = quadtree_grid(tl, h_grid_counts[2], mp(x1, middle_y),
-							mp(middle_x, y2), level + 1, nullptr, id * 4 + 3, boundaries);
+							mp(middle_x, y2), level + 1, nullptr, id * 4 + 2, boundaries);
 	tr_grid = quadtree_grid(tr, h_grid_counts[3], mp(middle_x, middle_y),
-							top_right_corner, level + 1, nullptr, id * 4 + 4, boundaries);
+							top_right_corner, level + 1, nullptr, id * 4 + 3, boundaries);
 
 	pair<float, float> upperBound = make_pair(x2, y2);
 	pair<float, float> lowerBound = make_pair(x1, y1);
@@ -165,70 +167,114 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 		tl_grid->parent = root_grid;
 	if (tr_grid)
 		tr_grid->parent = root_grid;
-	
-	
 
 	return root_grid;
 }
 
-// int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
-// {
-// 	// Prepare for GPU search
-// 	QuadrantBoundary *d_boundaries;
-// 	cudaMalloc(&d_boundaries, boundaries.size() * sizeof(QuadrantBoundary));
-// 	cudaMemcpy(d_boundaries, boundaries.data(), boundaries.size() * sizeof(QuadrantBoundary), cudaMemcpyHostToDevice);
-
-// 	Point *d_target_point;
-// 	cudaMalloc(&d_target_point, sizeof(Point));
-// 	cudaMemcpy(d_target_point, &target_point, sizeof(Point), cudaMemcpyHostToDevice);
-
-// 	int *d_result;
-// 	cudaMalloc(&d_result, sizeof(int));
-
-// 	int init_value = -1;
-// 	cudaMemcpy(d_result, &init_value, sizeof(int), cudaMemcpyHostToDevice);
-
-// 	int block_size = 256;
-// 	int num_blocks = 16;
-// 	quadrant_search<<<num_blocks, block_size>>>(d_target_point, d_boundaries, boundaries.size(), d_result);
-
-// 	int result;
-// 	cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-
-// 	// Free GPU memory
-// 	cudaFree(d_boundaries);
-// 	cudaFree(d_target_point);
-// 	cudaFree(d_result);
-
-// 	return (result == -1) ? -1 : result; // Return -1 if point not found in any quadrant
-// }
-
+// Function returns the quadrant id of the given point
 int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
 {
-	int deepest_id = 0; // Start with the root quadrant
+	QuadrantBoundary *d_boundaries;
+	cudaMalloc(&d_boundaries, boundaries.size() * sizeof(QuadrantBoundary));
+	cudaMemcpy(d_boundaries, boundaries.data(), boundaries.size() * sizeof(QuadrantBoundary), cudaMemcpyHostToDevice);
 
-	for (const auto &boundary : boundaries)
+	Point *d_target_point;
+	cudaMalloc(&d_target_point, sizeof(Point));
+	cudaMemcpy(d_target_point, &target_point, sizeof(Point), cudaMemcpyHostToDevice);
+
+	int *d_result;
+	cudaMalloc(&d_result, sizeof(int));
+
+	int init_value = -1;
+	cudaMemcpy(d_result, &init_value, sizeof(int), cudaMemcpyHostToDevice);
+
+	int block_size = 256;
+	int num_blocks = 16;
+	quadrant_search<<<num_blocks, block_size>>>(d_target_point, d_boundaries, boundaries.size(), d_result);
+
+	int result;
+	cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+
+	cudaFree(d_boundaries);
+	cudaFree(d_target_point);
+	cudaFree(d_result);
+
+	return (result == -1) ? -1 : result; // Return -1 if point not found in any quadrant
+}
+
+// int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
+// {
+// 	int deepest_id = 0; // Start with the root quadrant
+
+// 	for (const auto &boundary : boundaries)
+// 	{
+// 		// Check if the point is within this quadrant
+// 		if (target_point.x >= boundary.bottom_left.first &&
+// 			target_point.x <= boundary.top_right.first &&
+// 			target_point.y >= boundary.bottom_left.second &&
+// 			target_point.y <= boundary.top_right.second)
+// 		{
+
+// 			// Update the deepest_id if this quadrant is deeper (has a larger ID)
+// 			if (boundary.id > deepest_id)
+// 			{
+// 				deepest_id = boundary.id;
+// 			}
+// 		}
+// 	}
+
+// 	return deepest_id;
+// }
+Grid *findQuadrantById(Grid *root_grid, int quadrant_id)
+{
+	// Define a stack or path vector to hold the directions (e.g., 0 for bottom_left, 1 for bottom_right, etc.)
+	vector<int> path;
+
+	// Calculate path from root to target quadrant by repeatedly dividing quadrant_id by 4.
+	// Each remainder gives the child index at each level, from bottom to top.
+	int temp_id = quadrant_id;
+	while (temp_id > 0)
 	{
-		// Check if the point is within this quadrant
-		if (target_point.x >= boundary.bottom_left.first &&
-			target_point.x <= boundary.top_right.first &&
-			target_point.y >= boundary.bottom_left.second &&
-			target_point.y <= boundary.top_right.second)
-		{
+		path.push_back(temp_id % 4); // 0, 1, 2, or 3
+		temp_id /= 4;
+	}
 
-			// Update the deepest_id if this quadrant is deeper (has a larger ID)
-			if (boundary.id > deepest_id)
-			{
-				deepest_id = boundary.id;
-			}
+	// Traverse the path from the root grid, going from the root down to the target quadrant
+	Grid *current_grid = root_grid;
+	for (auto it = path.rbegin(); it != path.rend(); ++it)
+	{
+		switch (*it)
+		{
+		case 0:
+			current_grid = current_grid->bottom_left;
+			break;
+		case 1:
+			current_grid = current_grid->bottom_right;
+			break;
+		case 2:
+			current_grid = current_grid->top_left;
+			break;
+		case 3:
+			current_grid = current_grid->top_right;
+			break;
+		default:
+			printf("Invalid path in quadrant traversal");
+			return nullptr;
+		}
+		if (current_grid == nullptr)
+		{
+			printf("The path leads to a non-existent quadrant\n");
+			return nullptr;
 		}
 	}
 
-	return deepest_id;
+	return current_grid;
 }
 
-int main(int argc, char *argv[]) {
-	if (argc < 3) {
+int main(int argc, char *argv[])
+{
+	if (argc < 3)
+	{
 		std::cerr << "Usage: " << argv[0] << " file_path max_boundary"
 				  << std::endl;
 		return 1;
@@ -238,7 +284,8 @@ int main(int argc, char *argv[]) {
 	float max_size = atof(argv[2]);
 
 	ifstream file(filename);
-	if (!file) {
+	if (!file)
+	{
 		cerr << "Error: Could not open the file " << filename << endl;
 		return 1;
 	}
@@ -247,13 +294,17 @@ int main(int argc, char *argv[]) {
 	float x, y;
 	vector<Point> points;
 	int point_count = 0;
-	while (getline(file, line)) {
+	while (getline(file, line))
+	{
 		istringstream iss(line);
-		if (iss >> x >> y) {
+		if (iss >> x >> y)
+		{
 			Point p = Point((float)x, (float)y);
 			points.emplace_back(p);
 			point_count++;
-		} else {
+		}
+		else
+		{
 			cerr << "Warning: Skipping malformed line: " << line << endl;
 		}
 	}
@@ -268,28 +319,18 @@ int main(int argc, char *argv[]) {
 	Point target_point(8973, 5411);
 
 	int quadrant_id = search_quadrant(target_point, boundaries);
-	printf("The quadrant boundaries size %d \n", boundaries.size());
-	
+
 	printf("The quadrant id for the target point is: %d \n", quadrant_id);
 
-	// Use the result to search in the specific quadrant
-	if(quadrant_id == -1){
+	// Use the result to search in the specific quadrant (Need help here!)
+	if (quadrant_id == -1)
+	{
 		printf("The point doesn't exist in the grid");
 	}
-	
-	else{
-		Grid *current_grid = root_grid;
-		while (current_grid->id != quadrant_id)
-		{
-			if (quadrant_id % 4 == 1)
-				current_grid = current_grid->bottom_left;
-			else if (quadrant_id % 4 == 2)
-				current_grid = current_grid->bottom_right;
-			else if (quadrant_id % 4 == 3)
-				current_grid = current_grid->top_left;
-			else
-				current_grid = current_grid->top_right;
-		}
+
+	else
+	{
+		Grid *current_grid = findQuadrantById(root_grid, quadrant_id);
 
 		// Search for the point in the identified quadrant
 		bool found = false;
@@ -311,7 +352,6 @@ int main(int argc, char *argv[]) {
 			printf("Point not found in the grid.\n");
 		}
 	}
-	
 
 	return 0;
 }
