@@ -1,8 +1,17 @@
-CC=nvcc
-CFLAGS=-I. -g
+# Compiler and flags
+CC = nvcc
+CFLAGS = -I. -g
 
-create_grid: create_grid.cu kernels.cu
-	$(CC) -o create_grid create_grid.cu kernels.cu $(CFLAGS)
+# Target executable
+TARGET = create_grid
 
+# Source files
+SRCS = create_grid.cu kernels.cu quadtree_operations.cpp
+
+# Build rule for the executable
+$(TARGET): $(SRCS)
+	$(CC) -o $(TARGET) $(SRCS) $(CFLAGS)
+
+# Clean up
 clean:
-	rm -f create_grid *~
+	rm -f $(TARGET) *~

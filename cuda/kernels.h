@@ -1,6 +1,15 @@
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
 #include <utility>
+#include <unordered_map>
+
+using namespace std;
+
+#define mp make_pair
+#define fi first
+#define se second
+#define MIN_POINTS 5.0
+#define MIN_DISTANCE 5.0
 
 struct Point
 {
@@ -60,3 +69,7 @@ __global__ void organize_points(Point *d_points, int *d_categories, Point *bl,
 __global__ void quadrant_search(Point *target_point, QuadrantBoundary *boundaries, int num_boundaries, int *result);
 
 bool validateGrid(Grid *root_grid, std ::pair<float, float> &TopRight, std ::pair<float, float> &BottomLeft);
+
+int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries);
+
+void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map);

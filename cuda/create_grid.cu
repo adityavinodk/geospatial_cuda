@@ -9,12 +9,6 @@
 #include <unordered_map>
 using namespace std;
 
-#define mp make_pair
-#define fi first
-#define se second
-#define MIN_POINTS 5.0
-#define MIN_DISTANCE 5.0
-
 Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_corner,
 					pair<float, float> top_right_corner, int level,
 					Grid *parent, int id, vector<QuadrantBoundary> &boundaries,
@@ -148,13 +142,13 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	// bl, br, tl, tr and store in Grid struct
 	Grid *bl_grid, *tl_grid, *br_grid, *tr_grid;
 	bl_grid = quadtree_grid(bl, h_grid_counts[0], bottom_left_corner,
-								  mp(middle_x, middle_y), level + 1, nullptr, id * 4, boundaries, grid_map);
+							mp(middle_x, middle_y), level + 1, nullptr, id * 4, boundaries, grid_map);
 	br_grid = quadtree_grid(br, h_grid_counts[1], mp(middle_x, y1),
-								  mp(x2, middle_y), level + 1, nullptr, id * 4 + 1, boundaries, grid_map);
+							mp(x2, middle_y), level + 1, nullptr, id * 4 + 1, boundaries, grid_map);
 	tl_grid = quadtree_grid(tl, h_grid_counts[2], mp(x1, middle_y),
-								  mp(middle_x, y2), level + 1, nullptr, id * 4 + 2, boundaries, grid_map);
+							mp(middle_x, y2), level + 1, nullptr, id * 4 + 2, boundaries, grid_map);
 	tr_grid = quadtree_grid(tr, h_grid_counts[3], mp(middle_x, middle_y),
-								  top_right_corner, level + 1, nullptr, id * 4 + 3, boundaries, grid_map);
+							top_right_corner, level + 1, nullptr, id * 4 + 3, boundaries, grid_map);
 
 	pair<float, float> upperBound = make_pair(x2, y2);
 	pair<float, float> lowerBound = make_pair(x1, y1);
@@ -174,7 +168,6 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	return root_grid;
 }
 
-// Function returns the quadrant id of the given point
 int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries)
 {
 	QuadrantBoundary *d_boundaries;
@@ -203,60 +196,6 @@ int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundari
 	cudaFree(d_result);
 
 	return (result == -1) ? -1 : result; // Return -1 if point not found in any quadrant
-}
-
-void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map)
-{
-	// First, locate the quadrant ID where the new point should go
-	int quadrant_id = search_quadrant(new_point, boundaries);
-	if (quadrant_id == -1)
-	{
-		printf("The point is outside the grid boundaries and cannot be inserted.\n");
-		return;
-	}
-
-	// Access the target grid from the unordered map
-	Grid *target_grid = grid_map[quadrant_id];
-
-	// Check if the point already exists in the quadrant
-	for (int i = 0; i < target_grid->count; i++)
-	{
-		if (target_grid->points[i].x == new_point.x && target_grid->points[i].y == new_point.y)
-		{
-			printf("The point already exists in the grid.\n");
-			return;
-		}
-	}
-
-	// Add the point to the grid
-	Point *new_points = (Point *)malloc((target_grid->count + 1) * sizeof(Point));
-	memcpy(new_points, target_grid->points, target_grid->count * sizeof(Point));
-	new_points[target_grid->count] = new_point;
-	free(target_grid->points);
-	target_grid->points = new_points;
-	target_grid->count++;
-
-	// Propagate count increment to all parent nodes
-	Grid *parent_grid = target_grid->parent;
-	while (parent_grid)
-	{
-		parent_grid->count++;
-		parent_grid = parent_grid->parent;
-	}
-
-	// Check if the count exceeds MIN_POINTS; if so, split the quadrant
-	printf("The target grid point count is: %d \n", target_grid->count);
-	if (target_grid->count >= MIN_POINTS)
-	{
-		printf("The target grid exceeds the min point limit and needs to be further subdivided \n\n");
-		vector<QuadrantBoundary> new_boundaries;
-		quadtree_grid(target_grid->points, target_grid->count, target_grid->bottomLeft,
-					  target_grid->topRight, 0, target_grid->parent, quadrant_id, new_boundaries, grid_map);
-
-		// Update the boundaries in the main boundaries vector
-		boundaries.insert(boundaries.end(), new_boundaries.begin(), new_boundaries.end());
-	}
-	printf("Point inserted successfully.\n");
 }
 
 int main(int argc, char *argv[])
@@ -301,7 +240,7 @@ int main(int argc, char *argv[])
 
 	Point *points_array = points.data();
 	vector<QuadrantBoundary> boundaries;
-	unordered_map<int, Grid *> grid_map; //maintains the grid structure of the quadrant of the given quadrant id
+	unordered_map<int, Grid *> grid_map; // maintains the grid structure of the quadrant of the given quadrant id
 	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0, 0), mp(max_size, max_size), 0, nullptr, 0, boundaries, grid_map);
 
 	// Test Search
@@ -351,4 +290,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
