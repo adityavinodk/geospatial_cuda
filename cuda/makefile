@@ -2,17 +2,12 @@
 CC = nvcc
 CFLAGS = -I. -g
 
-# Target executable
-TARGET = create_grid
+grid: create_grid.cu kernels.cu search.cu insert.cpp
+	$(CC) -o create_grid create_grid.cu search.cu insert.cpp kernels.cu $(CFLAGS)
 
-# Source files
-SRCS = create_grid.cu kernels.cu search.cu insert.cpp
+grid_stream: create_grid_with_stream.cu kernels.cu
+	$(CC) -o create_grid_with_stream create_grid_with_stream.cu kernels.cu $(CFLAGS)
 
-# Build rule for the executable
-$(TARGET): $(SRCS)
-	$(CC) -o $(TARGET) $(SRCS) $(CFLAGS)
-
-# Clean up
 clean:
 	rm -f $(TARGET) *~
 

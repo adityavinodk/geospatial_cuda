@@ -1,7 +1,7 @@
 // quadtree_operations.cpp
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
-#include "kernels.h"
+#include <kernels.h>
 
 using namespace std;
 

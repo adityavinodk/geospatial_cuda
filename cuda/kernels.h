@@ -1,15 +1,19 @@
 #include <bits/stdc++.h>
+#include <cooperative_groups.h>
 #include <cuda_runtime.h>
+
 #include <utility>
 #include <unordered_map>
+namespace cg = cooperative_groups;
 
-using namespace std;
 
 #define mp make_pair
 #define fi first
 #define se second
 #define MIN_POINTS 5.0
 #define MIN_DISTANCE 5.0
+
+using namespace std;
 
 struct Point
 {
@@ -57,6 +61,9 @@ struct QuadrantBoundary
 	std::pair<float, float> top_right;
 	Grid *parent;
 };
+
+__inline__ __device__ int warpReduceSum(int value,
+										cg::thread_block_tile<32> warp);
 
 __global__ void categorize_points(Point *d_points, int *d_categories,
 								  int *grid_counts, int count, int range,

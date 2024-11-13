@@ -1,8 +1,21 @@
 #include <bits/stdc++.h>
+#include <cooperative_groups.h>
 #include <cuda_runtime.h>
-#include <kernels.h>
+
+#include "kernels.h"
 
 using namespace std;
+namespace cg = cooperative_groups;
+
+__inline__ __device__ int reduce_sum(int value,
+									 cg::thread_block_tile<32> warp) {
+	// Perform warp-wide reduction using shfl_down_sync
+	// Refer https://developer.nvidia.com/blog/using-cuda-warp-level-primitives/
+	for (int offset = warp.size() / 2; offset > 0; offset /= 2) {
+		value += __shfl_down_sync(0xFFFFFFFF, value, offset);
+	}
+	return value;
+}
 
 __global__ void categorize_points(Point *d_points, int *d_categories,
 								  int *grid_counts, int count, int range,
@@ -13,6 +26,10 @@ __global__ void categorize_points(Point *d_points, int *d_categories,
 	extern __shared__ int subgrid_counts[];
 
 	int start = ((blockIdx.x * blockDim.x) + threadIdx.x) * range;
+
+	// create a thread group for 32 threads (warp grouping)
+	cg::thread_block block = cg::this_thread_block();
+	cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
 
 	// Initialize the subgrid counts to 0
 	if (threadIdx.x == 0)
@@ -56,13 +73,19 @@ __global__ void categorize_points(Point *d_points, int *d_categories,
 		}
 	}
 
-	// CUDA built in function to perform atomic addition at given location
-	// Location : first variable
-	// Store the counts of points in their respective subgrid
-	atomicAdd(&subgrid_counts[0], first);
-	atomicAdd(&subgrid_counts[1], second);
-	atomicAdd(&subgrid_counts[2], third);
-	atomicAdd(&subgrid_counts[3], fourth);
+	// sum up all the sub quadrant counts inside a warp
+	first = reduce_sum(first, warp);
+	second = reduce_sum(second, warp);
+	third = reduce_sum(third, warp);
+	fourth = reduce_sum(fourth, warp);
+
+	// Only the first thread in each warp writes to shared memory
+	if (warp.thread_rank() == 0) {
+		atomicAdd(&subgrid_counts[0], first);
+		atomicAdd(&subgrid_counts[1], second);
+		atomicAdd(&subgrid_counts[2], third);
+		atomicAdd(&subgrid_counts[3], fourth);
+	}
 	__syncthreads();
 
 	// Add the values of subgrid_counts to grid_counts
