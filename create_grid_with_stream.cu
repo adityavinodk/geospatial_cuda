@@ -16,6 +16,28 @@ using namespace std;
 #define MIN_POINTS 5.0
 #define MIN_DISTANCE 5.0
 
+void addGrid(Grid *current_grid, Grid *quad_grid, int i)
+{
+    switch (i)
+    {
+    case 0:
+        current_grid->bottom_left = quad_grid;
+        break;
+    case 1:
+        current_grid->bottom_right = quad_grid;
+        break;
+    case 2:
+        current_grid->top_left = quad_grid;
+        break;
+    case 3:
+        current_grid->top_right = quad_grid;
+        break;
+
+    default:
+        break;
+    }
+}
+
 void quadtree_grid(Point *points, int count,
                    pair<float, float> bottom_left_corner,
                    pair<float, float> top_right_corner, cudaStream_t stream, queue<Grid *> *grid_q)
@@ -42,9 +64,9 @@ void quadtree_grid(Point *points, int count,
     vector<int> h_grid_counts(4);
 
     // Allocate memory to the pointers
-    cudaMalloc(&d_points, count * sizeof(Point));
-    cudaMalloc(&d_categories, count * sizeof(int));
-    cudaMalloc(&d_grid_counts, 4 * sizeof(int));
+    cudaMallocAsync(&d_points, count * sizeof(Point), stream);
+    cudaMallocAsync(&d_categories, count * sizeof(int), stream);
+    cudaMallocAsync(&d_grid_counts, 4 * sizeof(int), stream);
 
     // Copy the point data into device
     cudaMemcpyAsync(d_points, points, count * sizeof(Point),
@@ -92,10 +114,10 @@ void quadtree_grid(Point *points, int count,
     // Declare arrays for each section of the grid and allocate memory depending
     // on the number of points found
     Point *bottom_left, *bottom_right, *top_left, *top_right;
-    cudaMalloc(&bottom_left, h_grid_counts[0] * sizeof(Point));
-    cudaMalloc(&bottom_right, h_grid_counts[1] * sizeof(Point));
-    cudaMalloc(&top_left, h_grid_counts[2] * sizeof(Point));
-    cudaMalloc(&top_right, h_grid_counts[3] * sizeof(Point));
+    cudaMallocAsync(&bottom_left, h_grid_counts[0] * sizeof(Point), stream);
+    cudaMallocAsync(&bottom_right, h_grid_counts[1] * sizeof(Point), stream);
+    cudaMallocAsync(&top_left, h_grid_counts[2] * sizeof(Point), stream);
+    cudaMallocAsync(&top_right, h_grid_counts[3] * sizeof(Point), stream);
 
     dim3 grid2(1, 1, 1);
     dim3 block2(threads_per_block, 1, 1);
@@ -138,18 +160,20 @@ void quadtree_grid(Point *points, int count,
     grid_q->push(top_right_grid);
 
     // Free data
-    cudaFree(d_points);
-    cudaFree(d_categories);
-    cudaFree(d_grid_counts);
-    cudaFree(bottom_left);
-    cudaFree(bottom_right);
-    cudaFree(top_left);
-    cudaFree(top_right);
+    cudaFreeAsync(d_points, stream);
+    cudaFreeAsync(d_categories, stream);
+    cudaFreeAsync(d_grid_counts, stream);
+    cudaFreeAsync(bottom_left, stream);
+    cudaFreeAsync(bottom_right, stream);
+    cudaFreeAsync(top_left, stream);
+    cudaFreeAsync(top_right, stream);
+
+    cudaStreamSynchronize(stream);
 
     return;
 }
 
-void build_quadtree_levels(Point *points, int point_count, queue<Grid *> *grid_q, pair<float, float> bl, pair<float, float> tr)
+Grid *build_quadtree_levels(Point *points, int point_count, queue<Grid *> *grid_q, pair<float, float> bl, pair<float, float> tr)
 {
 
     // According to GPU documentations, 32 is the limit to the number of streams
@@ -158,7 +182,13 @@ void build_quadtree_levels(Point *points, int point_count, queue<Grid *> *grid_q
     double time_taken;
     clock_t start, end;
     start = clock();
-    Grid *grid;
+    // current grid keeps changing depending on the stream
+    Grid *current_grid;
+
+    queue<Grid *> recursive_grids;
+    Grid *root_grid = new Grid(nullptr, nullptr, nullptr, nullptr, points, bl, tr, point_count);
+    recursive_grids.push(root_grid);
+
     quadtree_grid(points, point_count, bl, tr, nullptr, grid_q);
 
     while (!grid_q->empty())
@@ -172,6 +202,12 @@ void build_quadtree_levels(Point *points, int point_count, queue<Grid *> *grid_q
             streams[i] = nullptr;
         }
 
+        if (!recursive_grids.empty())
+        {
+            current_grid = recursive_grids.front();
+            recursive_grids.pop();
+        }
+
         for (int i = 0; i < batch; i++)
         {
             if (grid_q->empty())
@@ -179,6 +215,12 @@ void build_quadtree_levels(Point *points, int point_count, queue<Grid *> *grid_q
 
             Grid *popped_grid = grid_q->front();
             grid_q->pop();
+
+            if (current_grid != nullptr && popped_grid)
+            {
+                addGrid(current_grid, popped_grid, i);
+                recursive_grids.push(popped_grid);
+            }
 
             int x1 = popped_grid->bottomLeft.fi, y1 = popped_grid->bottomLeft.se,
                 x2 = popped_grid->topRight.fi, y2 = popped_grid->topRight.se;
@@ -204,6 +246,8 @@ void build_quadtree_levels(Point *points, int point_count, queue<Grid *> *grid_q
     end = clock();
     time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
     printf("Time taken = %lf\n", time_taken);
+
+    return root_grid;
 }
 
 int main(int argc, char *argv[])
@@ -256,7 +300,21 @@ int main(int argc, char *argv[])
     }
 
     file.close();
+
+    pair<float, float> root_bl = mp(initial_bl_fi, initial_bl_se);
+    pair<float, float> root_tr = mp(initial_tr_fi, initial_tr_se);
+
     queue<Grid *> grid_q;
-    build_quadtree_levels(&points[0], point_count, &grid_q, mp(initial_bl_fi, initial_bl_se), mp(initial_tr_fi, initial_tr_se));
+    Grid *root_grid = build_quadtree_levels(&points[0], point_count, &grid_q, root_bl, root_tr);
+
+    printf("Validating grid...\n");
+
+    bool check = validateGrid(root_grid, root_bl, root_tr);
+
+    if (check == true)
+        printf("Grid Verification Success!\n");
+    else
+        printf("Grid Verification Failure!\n");
+
     return 0;
 }
