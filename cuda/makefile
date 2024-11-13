@@ -6,7 +6,7 @@ CFLAGS = -I. -g
 TARGET = create_grid
 
 # Source files
-SRCS = create_grid.cu kernels.cu quadtree_operations.cpp
+SRCS = create_grid.cu kernels.cu search.cu insert.cpp
 
 # Build rule for the executable
 $(TARGET): $(SRCS)
@@ -15,3 +15,4 @@ $(TARGET): $(SRCS)
 # Clean up
 clean:
 	rm -f $(TARGET) *~
+
