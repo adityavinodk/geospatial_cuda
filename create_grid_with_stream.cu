@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
 
     printf("Validating grid...\n");
 
-    bool check = validateGrid(root_grid, root_bl, root_tr);
+    bool check = validateGrid(root_grid, root_tr, root_bl);
 
     if (check == true)
         printf("Grid Verification Success!\n");
