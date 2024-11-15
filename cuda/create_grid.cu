@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
 			{
 				Grid *current_grid = it->second;
 				bool found = false;
-				for (int j = 0; j < current_grid->count; i++)
+				for (int j = 0; j < current_grid->count; j++)
 				{
 					if (current_grid->points[j].x == queries[i].point.x && current_grid->points[j].y == queries[i].point.y)
 					{
@@ -313,48 +313,6 @@ int main(int argc, char *argv[])
 	// int quadrant_id = search_quadrant(target_point, boundaries);
 
 	// printf("The quadrant id for the target point is: %d \n", quadrant_id);
-
-	// Use the result to search in the specific quadrant (Need help here!)
-	// int size = results.size() ;
-	// for(int i = 0; i < size; i++){
-	// 	printf("The point to be searched (%f, %f) with a quadrant id: %d", queries[i].point.x, queries[i].point.y, results[i]);
-	// 	if (results[i] == -1)
-	// 	{
-	// 		printf("The point (%f, %f)oesn't exist in the grid \n", queries[i].point.x, queries[i].point.y);
-	// 	}
-
-	// 	else
-	// 	{
-	// 		auto it = grid_map.find(results[i]);
-	// 		if (it != grid_map.end())
-	// 		{
-	// 			Grid *current_grid = it->second;
-	// 			bool found = false;
-	// 			for (int j = 0; j < current_grid->count; i++)
-	// 			{
-	// 				if (current_grid->points[j].x == queries[j].point.x && current_grid->points[j].y == queries[j].point.y)
-	// 				{
-	// 					found = true;
-	// 					break;
-	// 				}
-	// 			}
-
-	// 			if (found)
-	// 			{
-	// 				printf("Point found in quadrant with ID: %d\n", results[i]);
-	// 			}
-	// 			else
-	// 			{
-	// 				printf("Point not found in the grid.\n");
-	// 			}
-	// 		}
-	// 		else
-	// 		{
-	// 			printf("Quadrant with ID %d not found in the map.\n", results[i]);
-	// 		}
-	// 	}
-	// 	printf("cehck\n");
-	// }
 
 	return 0;
 }
