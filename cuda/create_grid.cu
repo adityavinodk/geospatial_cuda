@@ -51,7 +51,6 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	int *d_categories, *d_grid_counts;
 
 	// Declare vectors to store the final values.
-	vector<int> h_categories(count);
 	vector<int> h_grid_counts(4);
 
 	// Allocate memory to the pointers
@@ -80,9 +79,6 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	float value = static_cast<float>(count) / (num_blocks * threads_per_block);
 	range = max(1.0, ceil(value));
 
-	dim3 grid(num_blocks, 1, 1);
-	dim3 block(threads_per_block, 1, 1);
-
 	// KERNEL Function to categorize points into 4 subgrids
 	float middle_x = (x2 + x1) / 2, middle_y = (y2 + y1) / 2;
 	vprint("mid_x = %f, mid_y = %f\n", middle_x, middle_y);
@@ -90,13 +86,11 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	vprint(
 		"%d: Categorize in GPU: %d blocks of %d threads each with range=%d\n",
 		level, num_blocks, threads_per_block, range);
-	categorize_points<<<grid, block, 4 * sizeof(int)>>>(
+	categorize_points<<<num_blocks, threads_per_block, 4 * sizeof(int)>>>(
 		d_points, d_categories, d_grid_counts, count, range, middle_x,
 		middle_y);
 
 	// Get back the data from device to host
-	cudaMemcpy(h_categories.data(), d_categories, count * sizeof(int),
-			   cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_grid_counts.data(), d_grid_counts, 4 * sizeof(int),
 			   cudaMemcpyDeviceToHost);
 
@@ -121,15 +115,12 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 	cudaMalloc(&top_left, h_grid_counts[2] * sizeof(Point));
 	cudaMalloc(&top_right, h_grid_counts[3] * sizeof(Point));
 
-	dim3 grid2(1, 1, 1);
-	dim3 block2(threads_per_block, 1, 1);
-
 	// KERNEL Function to assign the points to its respective array
 	value = static_cast<float>(count) / threads_per_block;
 	range = max(1.0, ceil(value));
 	vprint("%d: Organize in GPU: 1 block of %d threads each with range=%d\n",
 		   level, threads_per_block, range);
-	organize_points<<<grid2, block2, 4 * sizeof(int)>>>(
+	organize_points<<<1, threads_per_block, 4 * sizeof(int)>>>(
 		d_points, d_categories, bottom_left, bottom_right, top_left, top_right,
 		count, range);
 

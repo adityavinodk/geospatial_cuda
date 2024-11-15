@@ -78,8 +78,12 @@ __global__ void organize_points(Point *d_points, int *d_categories, Point *bl,
 
 __global__ void quadrant_search(Query *queries, int num_queries, QuadrantBoundary *boundaries, int num_boundaries, int *results);
 
-bool validateGrid(Grid *root_grid, std ::pair<float, float> &TopRight, std ::pair<float, float> &BottomLeft);
-
 std::vector<int> search_quadrant(const std::vector<Query> &queries, const std::vector<QuadrantBoundary> &boundaries);
 
 void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map);
+__global__ void reorder_points(Point *d_points, Point *grid_points,
+							   int *grid_counts, int count, int range,
+							   float middle_x, float middle_y, int start_pos);
+
+bool validate_grid(Grid *root_grid, pair<float, float> &top_right_corner,
+				   pair<float, float> &bottom_left_corner);

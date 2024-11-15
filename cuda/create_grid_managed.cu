@@ -30,10 +30,8 @@ Grid *quadtree_grid(Point *points, int count,
 
 	if (count < MIN_POINTS or
 		(abs(x1 - x2) < MIN_DISTANCE and abs(y1 - y2) < MIN_DISTANCE)) {
-		pair<float, float> upper_bound = make_pair(x2, y2);
-		pair<float, float> lower_bound = make_pair(x1, y1);
-		return new Grid(nullptr, nullptr, nullptr, nullptr, points, upper_bound,
-						lower_bound, count);
+		return new Grid(nullptr, nullptr, nullptr, nullptr, points,
+						top_right_corner, bottom_left_corner, count);
 	}
 
 	vprint("%d: Creating grid from (%f,%f) to (%f,%f) for %d points\n", level,
@@ -65,9 +63,6 @@ Grid *quadtree_grid(Point *points, int count,
 	// Calculate the work done by each thread
 	float value = static_cast<float>(count) / (num_blocks * threads_per_block);
 	range = max(1.0, ceil(value));
-
-	dim3 grid(num_blocks, 1, 1);
-	dim3 block(threads_per_block, 1, 1);
 
 	// KERNEL Function to categorize points into 4 subgrids
 	float middle_x = (x2 + x1) / 2, middle_y = (y2 + y1) / 2;
@@ -102,9 +97,6 @@ Grid *quadtree_grid(Point *points, int count,
 	cudaMallocManaged(&top_left, d_grid_counts[2] * sizeof(Point));
 	cudaMallocManaged(&top_right, d_grid_counts[3] * sizeof(Point));
 
-	dim3 grid2(1, 1, 1);
-	dim3 block2(threads_per_block, 1, 1);
-
 	// KERNEL Function to assign the points to its respective array
 	value = static_cast<float>(count) / threads_per_block;
 	range = max(1.0, ceil(value));
@@ -114,12 +106,8 @@ Grid *quadtree_grid(Point *points, int count,
 		d_points, d_categories, bottom_left, bottom_right, top_left, top_right,
 		count, range);
 
-	// The bounds of the grid
-	pair<float, float> upper_bound = make_pair(x2, y2);
-	pair<float, float> lower_bound = make_pair(x1, y1);
-
 	Grid *new_grid = new Grid(nullptr, nullptr, nullptr, nullptr, points,
-							  upper_bound, lower_bound, count);
+							  top_right_corner, bottom_left_corner, count);
 
 	// Synchronize to ensure kernel completion
 	cudaDeviceSynchronize();
