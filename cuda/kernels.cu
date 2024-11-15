@@ -147,21 +147,6 @@ __global__ void organize_points(Point *d_points, int *d_categories, Point *bl,
 	}
 }
 
-// Quandrant Search to find the level of the quadrant where the point lies
-// __global__ void quadrant_search(Point *target_point, QuadrantBoundary *boundaries, int num_boundaries, int *result)
-// {
-// 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-// 	if (idx < num_boundaries)
-// 	{
-// 		QuadrantBoundary boundary = boundaries[idx];
-// 		if (target_point->x >= boundary.bottom_left.first && target_point->x <= boundary.top_right.first &&
-// 			target_point->y >= boundary.bottom_left.second && target_point->y <= boundary.top_right.second)
-// 		{
-// 			atomicMax(result, boundary.id);
-// 		}
-// 	}
-// }
-
 __global__ void quadrant_search(Query *queries, int num_queries, QuadrantBoundary *boundaries, int num_boundaries, int *results)
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -181,6 +166,9 @@ __global__ void quadrant_search(Query *queries, int num_queries, QuadrantBoundar
 		}
 
 		results[idx] = result;
+	}
+}
+
 __global__ void reorder_points(Point *d_points, Point *grid_points,
 							   int *grid_counts, int count, int range,
 							   float middle_x, float middle_y, int start_pos) {
