@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
 #include <time.h>
-#include <kernels.h>
+#include "kernels.h"
 
 #include <cmath>
 #include <fstream>
@@ -18,7 +18,8 @@ using namespace std;
 #define MAX_THREADS_PER_BLOCK 512
 #define VERBOSE false
 #define vprint(s...) \
-	if (VERBOSE) {   \
+	if (VERBOSE)     \
+	{                \
 		printf(s);   \
 	}
 
@@ -63,11 +64,14 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 
 	// Set the number of blocks and threads per block
 	int range, num_blocks, threads_per_block = MAX_THREADS_PER_BLOCK;
-	if (count <= MAX_THREADS_PER_BLOCK) {
+	if (count <= MAX_THREADS_PER_BLOCK)
+	{
 		float warps = static_cast<float>(count) / 32;
 		threads_per_block = ceil(warps) * 32;
 		num_blocks = 1;
-	} else {
+	}
+	else
+	{
 		float blocks = static_cast<float>(count) / MAX_THREADS_PER_BLOCK;
 		num_blocks = min(32.0, ceil(blocks));
 	}
@@ -98,12 +102,14 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
 
 	int total = 0;
 	vprint("%d: Point counts per sub grid - \n", level);
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 4; i++)
+	{
 		vprint("sub grid %d - %d\n", i + 1, h_grid_counts[i]);
 		total += h_grid_counts[i];
 	}
 	vprint("Total Count - %d\n", count);
-	if (total == count) {
+	if (total == count)
+	{
 		vprint("Sum of sub grid counts matches total point count\n");
 	}
 
@@ -235,11 +241,12 @@ int main(int argc, char *argv[])
 	vector<QuadrantBoundary> boundaries;
 	unordered_map<int, Grid *> grid_map; // maintains the grid structure of the quadrant of the given quadrant id
 
-	for (int i = 0; i < point_count; i++) {
+	for (int i = 0; i < point_count; i++)
+	{
 		points_array[i] = points[i];
 	}
 	start = clock();
-		Grid *root_grid = quadtree_grid(points_array, point_count, mp(0, 0), mp(max_size, max_size), 0, nullptr, 0, boundaries, grid_map);
+	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0, 0), mp(max_size, max_size), 0, nullptr, 0, boundaries, grid_map);
 	end = clock();
 
 	time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
@@ -255,50 +262,99 @@ int main(int argc, char *argv[])
 	else
 		printf("Grid Verification Failure!\n");
 
+	vector<Query> queries = {
+		{'s', Point(9981.0, 9979.0)},
+		{'s', Point(5000.0, 5000.0)},
+		{'s', Point(9981.0, 9979.0)},
+		{'s', Point(100.0, 100.0)}
+		// Add more queries as needed
+	};
+
 	// Test Search
-	Point target_point(9981, 9979);
-
-	insert_point(target_point, root_grid, boundaries, grid_map);
-	int quadrant_id = search_quadrant(target_point, boundaries);
-
-	printf("The quadrant id for the target point is: %d \n", quadrant_id);
-
-	// Use the result to search in the specific quadrant (Need help here!)
-	if (quadrant_id == -1)
+	vector<int> results = search_quadrant(queries, boundaries);
+	printf("\n\n\n @@@@@@@@ \n\n\n %d \n\n", results[2]);
+	for (int i = 0; i < results.size(); i++)
 	{
-		printf("The point doesn't exist in the grid");
-	}
-
-	else
-	{
-		auto it = grid_map.find(quadrant_id);
-		if (it != grid_map.end())
+		printf("The point to be searched (%f, %f) with a quadrant id: %d \n \n", queries[i].point.x, queries[i].point.y, results[i]);
+		if (results[i] > 0)
 		{
-			Grid *current_grid = it->second;
-			bool found = false;
-			for (int i = 0; i < current_grid->count; i++)
+			auto it = grid_map.find(results[i]);
+			if (it != grid_map.end())
 			{
-				if (current_grid->points[i].x == target_point.x && current_grid->points[i].y == target_point.y)
+				Grid *current_grid = it->second;
+				bool found = false;
+				for (int j = 0; j < current_grid->count; i++)
 				{
-					found = true;
-					break;
+					if (current_grid->points[j].x == queries[i].point.x && current_grid->points[j].y == queries[i].point.y)
+					{
+						found = true;
+						break;
+					}
 				}
-			}
 
-			if (found)
-			{
-				printf("Point found in quadrant with ID: %d\n", quadrant_id);
+				if (found)
+				{
+					printf("Point found in quadrant with ID: %d\n", results[i]);
+				}
+				else
+				{
+					printf("Point not found in the grid.\n");
+				}
 			}
 			else
 			{
-				printf("Point not found in the grid.\n");
+				printf("Quadrant with ID %d not found in the map.\n", results[i]);
 			}
 		}
-		else
-		{
-			printf("Quadrant with ID %d not found in the map.\n", quadrant_id);
-		}
 	}
+	// Point target_point(9981, 9979);
+
+	// insert_point(target_point, root_grid, boundaries, grid_map);
+	// int quadrant_id = search_quadrant(target_point, boundaries);
+
+	// printf("The quadrant id for the target point is: %d \n", quadrant_id);
+
+	// Use the result to search in the specific quadrant (Need help here!)
+	// int size = results.size() ;
+	// for(int i = 0; i < size; i++){
+	// 	printf("The point to be searched (%f, %f) with a quadrant id: %d", queries[i].point.x, queries[i].point.y, results[i]);
+	// 	if (results[i] == -1)
+	// 	{
+	// 		printf("The point (%f, %f)oesn't exist in the grid \n", queries[i].point.x, queries[i].point.y);
+	// 	}
+
+	// 	else
+	// 	{
+	// 		auto it = grid_map.find(results[i]);
+	// 		if (it != grid_map.end())
+	// 		{
+	// 			Grid *current_grid = it->second;
+	// 			bool found = false;
+	// 			for (int j = 0; j < current_grid->count; i++)
+	// 			{
+	// 				if (current_grid->points[j].x == queries[j].point.x && current_grid->points[j].y == queries[j].point.y)
+	// 				{
+	// 					found = true;
+	// 					break;
+	// 				}
+	// 			}
+
+	// 			if (found)
+	// 			{
+	// 				printf("Point found in quadrant with ID: %d\n", results[i]);
+	// 			}
+	// 			else
+	// 			{
+	// 				printf("Point not found in the grid.\n");
+	// 			}
+	// 		}
+	// 		else
+	// 		{
+	// 			printf("Quadrant with ID %d not found in the map.\n", results[i]);
+	// 		}
+	// 	}
+	// 	printf("cehck\n");
+	// }
 
 	return 0;
 }

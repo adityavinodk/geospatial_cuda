@@ -4,8 +4,8 @@
 
 #include <utility>
 #include <unordered_map>
-namespace cg = cooperative_groups;
 
+namespace cg = cooperative_groups;
 
 #define mp make_pair
 #define fi first
@@ -21,8 +21,6 @@ struct Point
 
 	Point(float xc, float yc) : x(xc), y(yc) {}
 };
-
-
 
 struct Grid
 {
@@ -59,7 +57,12 @@ struct QuadrantBoundary
 	int id;
 	std::pair<float, float> bottom_left;
 	std::pair<float, float> top_right;
-	Grid *parent;
+};
+
+struct Query
+{
+	char type; // 'i' for insert, 's' for search
+	Point point;
 };
 
 __inline__ __device__ int warpReduceSum(int value,
@@ -73,10 +76,10 @@ __global__ void organize_points(Point *d_points, int *d_categories, Point *bl,
 								Point *br, Point *tl, Point *tr, int count,
 								int range);
 
-__global__ void quadrant_search(Point *target_point, QuadrantBoundary *boundaries, int num_boundaries, int *result);
+__global__ void quadrant_search(Query *queries, int num_queries, QuadrantBoundary *boundaries, int num_boundaries, int *results);
 
 bool validateGrid(Grid *root_grid, std ::pair<float, float> &TopRight, std ::pair<float, float> &BottomLeft);
 
-int search_quadrant(Point target_point, const vector<QuadrantBoundary> &boundaries);
+std::vector<int> search_quadrant(const std::vector<Query> &queries, const std::vector<QuadrantBoundary> &boundaries);
 
 void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map);

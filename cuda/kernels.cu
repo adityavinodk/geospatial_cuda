@@ -8,10 +8,12 @@ using namespace std;
 namespace cg = cooperative_groups;
 
 __inline__ __device__ int reduce_sum(int value,
-									 cg::thread_block_tile<32> warp) {
+									 cg::thread_block_tile<32> warp)
+{
 	// Perform warp-wide reduction using shfl_down_sync
 	// Refer https://developer.nvidia.com/blog/using-cuda-warp-level-primitives/
-	for (int offset = warp.size() / 2; offset > 0; offset /= 2) {
+	for (int offset = warp.size() / 2; offset > 0; offset /= 2)
+	{
 		value += __shfl_down_sync(0xFFFFFFFF, value, offset);
 	}
 	return value;
@@ -80,7 +82,8 @@ __global__ void categorize_points(Point *d_points, int *d_categories,
 	fourth = reduce_sum(fourth, warp);
 
 	// Only the first thread in each warp writes to shared memory
-	if (warp.thread_rank() == 0) {
+	if (warp.thread_rank() == 0)
+	{
 		atomicAdd(&subgrid_counts[0], first);
 		atomicAdd(&subgrid_counts[1], second);
 		atomicAdd(&subgrid_counts[2], third);
@@ -145,17 +148,39 @@ __global__ void organize_points(Point *d_points, int *d_categories, Point *bl,
 }
 
 // Quandrant Search to find the level of the quadrant where the point lies
-__global__ void quadrant_search(Point *target_point, QuadrantBoundary *boundaries, int num_boundaries, int *result)
+// __global__ void quadrant_search(Point *target_point, QuadrantBoundary *boundaries, int num_boundaries, int *result)
+// {
+// 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+// 	if (idx < num_boundaries)
+// 	{
+// 		QuadrantBoundary boundary = boundaries[idx];
+// 		if (target_point->x >= boundary.bottom_left.first && target_point->x <= boundary.top_right.first &&
+// 			target_point->y >= boundary.bottom_left.second && target_point->y <= boundary.top_right.second)
+// 		{
+// 			atomicMax(result, boundary.id);
+// 		}
+// 	}
+// }
+
+__global__ void quadrant_search(Query *queries, int num_queries, QuadrantBoundary *boundaries, int num_boundaries, int *results)
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_boundaries)
+	if (idx < num_queries)
 	{
-		QuadrantBoundary boundary = boundaries[idx];
-		if (target_point->x >= boundary.bottom_left.first && target_point->x <= boundary.top_right.first &&
-			target_point->y >= boundary.bottom_left.second && target_point->y <= boundary.top_right.second)
+		Query query = queries[idx];
+		int result = -1;
+
+		for (int i = 0; i < num_boundaries; i++)
 		{
-			atomicMax(result, boundary.id);
+			QuadrantBoundary boundary = boundaries[i];
+			if (query.point.x >= boundary.bottom_left.first && query.point.x <= boundary.top_right.first &&
+				query.point.y >= boundary.bottom_left.second && query.point.y <= boundary.top_right.second)
+			{
+				result = max(result, boundary.id);
+			}
 		}
+
+		results[idx] = result;
 	}
 }
 
