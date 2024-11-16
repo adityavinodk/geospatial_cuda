@@ -5,7 +5,7 @@
 #include <utility>
 #include <unordered_map>
 
-namespace cg = cooperative_groups;
+// namespace cg = cooperative_groups;
 
 #define mp make_pair
 #define fi first
@@ -65,8 +65,7 @@ struct Query
 	Point point;
 };
 
-__inline__ __device__ int warpReduceSum(int value,
-										cg::thread_block_tile<32> warp);
+//__inline__ __device__ int warpReduceSum(int value,cooperative_groups::thread_block_tile<32> warp);
 
 __global__ void categorize_points(Point *d_points, int *d_categories,
 								  int *grid_counts, int count, int range,
@@ -80,10 +79,10 @@ __global__ void quadrant_search(Query *queries, int num_queries, QuadrantBoundar
 
 std::vector<int> search_quadrant(const std::vector<Query> &queries, const std::vector<QuadrantBoundary> &boundaries);
 
-void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map);
+void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map, int quadrant_id);
 __global__ void reorder_points(Point *d_points, Point *grid_points,
 							   int *grid_counts, int count, int range,
 							   float middle_x, float middle_y, int start_pos);
 
-bool validate_grid(Grid *root_grid, pair<float, float> &top_right_corner,
-				   pair<float, float> &bottom_left_corner);
+bool validateGrid(Grid *root_grid, std::pair<float, float> &top_right_corner,
+				  std::pair<float, float> &bottom_left_corner);

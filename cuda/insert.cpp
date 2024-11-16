@@ -1,7 +1,6 @@
-// quadtree_operations.cpp
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
-#include <kernels.h>
+#include "kernels.h"
 
 using namespace std;
 
@@ -11,28 +10,11 @@ Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_cor
                     Grid *parent, int id, vector<QuadrantBoundary> &boundaries,
                     unordered_map<int, Grid *> &grid_map);
 
-void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map)
+void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map, int quadrant_id)
 {
-    // First, locate the quadrant ID where the new point should go
-    int quadrant_id = search_quadrant(new_point, boundaries);
-    if (quadrant_id == -1)
-    {
-        printf("The point is outside the grid boundaries and cannot be inserted.\n");
-        return;
-    }
 
     // Access the target grid from the unordered map
     Grid *target_grid = grid_map[quadrant_id];
-
-    // Check if the point already exists in the quadrant
-    for (int i = 0; i < target_grid->count; i++)
-    {
-        if (target_grid->points[i].x == new_point.x && target_grid->points[i].y == new_point.y)
-        {
-            printf("The point already exists in the grid.\n");
-            return;
-        }
-    }
 
     // Add the point to the grid
     Point *new_points = (Point *)malloc((target_grid->count + 1) * sizeof(Point));

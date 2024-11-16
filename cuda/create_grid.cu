@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
 	vector<Query> queries = {
 		{'s', Point(9981.0, 9979.0)},
 		{'s', Point(5000.0, 5000.0)},
-		{'s', Point(9981.0, 9979.0)},
+		{'i', Point(9981.0, 9979.0)},
 		{'s', Point(100.0, 100.0)}
 		// Add more queries as needed
 	};
@@ -282,14 +282,22 @@ int main(int argc, char *argv[])
 						break;
 					}
 				}
-
-				if (found)
+				printf("The type of the query is: %c \n", queries[i].type);
+				switch (queries[i].type)
 				{
-					printf("Point found in quadrant with ID: %d\n", results[i]);
-				}
-				else
-				{
-					printf("Point not found in the grid.\n");
+				case 's':
+					if (found)
+						printf("Point found in quadrant with ID: %d\n", results[i]);
+					else
+						printf("Point not found in the grid.\n");
+					break;
+				case 'i':
+					printf("Inserting a point \n");
+					if (found)
+						printf("Point already exists in quadrant with ID: %d\n", results[i]);
+					else
+						insert_point(queries[i].point, root_grid, boundaries, grid_map, results[i]);
+					break;
 				}
 			}
 			else
@@ -298,12 +306,6 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	// Point target_point(9981, 9979);
-
-	// insert_point(target_point, root_grid, boundaries, grid_map);
-	// int quadrant_id = search_quadrant(target_point, boundaries);
-
-	// printf("The quadrant id for the target point is: %d \n", quadrant_id);
 
 	return 0;
 }
