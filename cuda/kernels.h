@@ -5,15 +5,8 @@
 #include <unordered_map>
 #include <utility>
 
-// namespace cg = cooperative_groups;
-
-#define mp make_pair
-#define fi first
-#define se second
-#define MIN_POINTS 5.0
-#define MIN_DISTANCE 5.0
-
 using namespace std;
+namespace cg = cooperative_groups;
 
 struct Point {
 	float x, y;
@@ -119,6 +112,12 @@ __global__ void reorder_points_h_alloc(Point *d_points_array,
 									   int range, float middle_x,
 									   float middle_y, int start_pos,
 									   int *d_grid_count);
+
+GridArray *construct_grid_array(Point *d_grid_points0, Point *d_grid_points1,
+						 int count, pair<float, float> bottom_left_corner,
+						 pair<float, float> top_right_corner,
+						 int *h_grid_counts, int *d_grid_counts, int start_pos,
+						 int level, int grid_array_flag);
 
 bool validate_grid(Grid *root_grid, pair<float, float> &top_right_corner,
 				   pair<float, float> &bottom_left_corner);
