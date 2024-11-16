@@ -254,19 +254,21 @@ int main(int argc, char *argv[])
 		printf("Grid Verification Failure!\n");
 
 	vector<Query> queries = {
-		{'s', Point(9981.0, 9979.0)},
 		{'s', Point(5000.0, 5000.0)},
 		{'i', Point(9981.0, 9979.0)},
-		{'s', Point(100.0, 100.0)}
+		{'s', Point(9981.0, 9979.0)},
+		{'s', Point(100.0, 100.0)},
+		{'d', Point(9981.0, 9979.0)},
+		{'s', Point(9981.0, 9979.0)}
 		// Add more queries as needed
 	};
 
 	// Test Search
 	vector<int> results = search_quadrant(queries, boundaries);
-	printf("\n\n\n @@@@@@@@ \n\n\n %d \n\n", results[2]);
 	for (int i = 0; i < results.size(); i++)
 	{
-		printf("The point to be searched (%f, %f) with a quadrant id: %d \n \n", queries[i].point.x, queries[i].point.y, results[i]);
+		printf("\n");
+		printf("The point to be searched (%f, %f) with a quadrant id: %d \n", queries[i].point.x, queries[i].point.y, results[i]);
 		if (results[i] > 0)
 		{
 			auto it = grid_map.find(results[i]);
@@ -298,6 +300,12 @@ int main(int argc, char *argv[])
 					else
 						insert_point(queries[i].point, root_grid, boundaries, grid_map, results[i]);
 					break;
+				case 'd':
+					printf("Deleting a point \n");
+					if (found)
+						delete_point(queries[i].point, root_grid, boundaries, grid_map, results[i]);
+					else
+						printf("Point does not exist in the grid \n");
 				}
 			}
 			else
