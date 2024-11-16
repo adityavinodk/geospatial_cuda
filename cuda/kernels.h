@@ -19,6 +19,8 @@ struct Point
 {
 	float x, y;
 
+	Point() : x(), y() {}
+
 	Point(float xc, float yc) : x(xc), y(yc) {}
 };
 
@@ -65,7 +67,30 @@ struct Query
 	Point point;
 };
 
-//__inline__ __device__ int warpReduceSum(int value,cooperative_groups::thread_block_tile<32> warp);
+struct GridArray {
+	GridArray *bottom_left, *bottom_right, *top_left, *top_right;
+
+	int count, start_pos, grid_array_flag;
+
+	std ::pair<float, float> top_right_corner;
+	std ::pair<float, float> bottom_left_corner;
+
+	GridArray(GridArray *bl, GridArray *br, GridArray *tl, GridArray *tr,
+			  pair<float, float> uB, pair<float, float> lB, int c, int sp,
+			  int gfl)
+		: bottom_left(bl),
+		  bottom_right(br),
+		  top_left(tl),
+		  top_right(tr),
+		  top_right_corner(uB),
+		  bottom_left_corner(lB),
+		  count(c),
+		  start_pos(sp),
+		  grid_array_flag(gfl) {}
+};
+
+__inline__ __device__ int warpReduceSum(int value,
+										cg::thread_block_tile<32> warp);
 
 __global__ void categorize_points(Point *d_points, int *d_categories,
 								  int *grid_counts, int count, int range,
@@ -84,8 +109,19 @@ void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &bo
 void delete_point(Point point_to_delete, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map, int quadrant_id);
 
 __global__ void reorder_points(Point *d_points, Point *grid_points,
-								   int *grid_counts, int count, int range,
-								   float middle_x, float middle_y, int start_pos);
+							   int *grid_counts, int count, int range,
+							   float middle_x, float middle_y, int start_pos,
+							   bool opt);
 
-bool validateGrid(Grid *root_grid, std::pair<float, float> &top_right_corner,
-				  std::pair<float, float> &bottom_left_corner);
+// implementation for host_alloc
+__global__ void reorder_points_h_alloc(Point *d_points_array,
+									   Point *d_grid_points, int count,
+									   int range, float middle_x,
+									   float middle_y, int start_pos,
+									   int *d_grid_count);
+
+bool validate_grid(Grid *root_grid, pair<float, float> &top_right_corner,
+				   pair<float, float> &bottom_left_corner);
+
+Grid *assign_points(GridArray *root_grid, Point *grid_array1,
+					Point *grid_array2);
