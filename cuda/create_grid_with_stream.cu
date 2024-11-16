@@ -24,7 +24,6 @@ using namespace std;
 	}
 
 void addGrid(Grid *current_grid, Grid *quad_grid, int i) {
-	quad_grid->parent = current_grid;// set parent
 	switch (i) {
 		case 0:
 			current_grid->bottom_left = quad_grid;
@@ -47,14 +46,9 @@ void addGrid(Grid *current_grid, Grid *quad_grid, int i) {
 void quadtree_grid(Point *points, int count,
 				   pair<float, float> bottom_left_corner,
 				   pair<float, float> top_right_corner, cudaStream_t stream,
-				   queue<Grid *> *grid_q, Grid *parent, int id, vector<QuadrantBoundary> &boundaries,
-				   unordered_map<int, Grid *> &grid_map)
-{
+				   queue<Grid *> *grid_q) {
 	float x1 = bottom_left_corner.fi, y1 = bottom_left_corner.se,
 		  x2 = top_right_corner.fi, y2 = top_right_corner.se;
-
-	boundaries.push_back({id, bottom_left_corner, top_right_corner});
-
 	// subdivide points into quadrants only if we have enough points to split
 	if (count < MIN_POINTS or
 		(abs(x1 - x2) < MIN_DISTANCE and abs(y1 - y2) < MIN_DISTANCE)) {
@@ -161,27 +155,22 @@ void quadtree_grid(Point *points, int count,
 	cudaStreamSynchronize(stream);
 
 	Grid *bottom_left_grid =
-		new Grid(nullptr, nullptr, nullptr, nullptr, bl,
-				 mp(middle_x, middle_y), mp(x1, y1), h_grid_counts[0], nullptr, id * 4, boundaries, grid_map);
+		new Grid(nullptr, nullptr, nullptr, nullptr, bl, mp(middle_x, middle_y),
+				 mp(x1, y1), h_grid_counts[0]);
 	Grid *bottom_right_grid =
-		new Grid(nullptr, nullptr, nullptr, nullptr, br,
-				 mp(x2, middle_y), mp(middle_x, y1), h_grid_counts[1], nullptr, id * 4 + 1, boundaries, grid_map);
+		new Grid(nullptr, nullptr, nullptr, nullptr, br, mp(x2, middle_y),
+				 mp(middle_x, y1), h_grid_counts[1]);
 	Grid *top_left_grid =
-		new Grid(nullptr, nullptr, nullptr, nullptr, tl,
-				 mp(middle_x, y2), mp(x1, middle_y), h_grid_counts[2], nullptr, id * 4 + 2, boundaries, grid_map);
+		new Grid(nullptr, nullptr, nullptr, nullptr, tl, mp(middle_x, y2),
+				 mp(x1, middle_y), h_grid_counts[2]);
 	Grid *top_right_grid =
-		new Grid(nullptr, nullptr, nullptr, nullptr, tr,
-				 mp(x2, y2), mp(middle_x, middle_y), h_grid_counts[3], nullptr, id * 4 + 3, boundaries, grid_map);
+		new Grid(nullptr, nullptr, nullptr, nullptr, tr, mp(x2, y2),
+				 mp(middle_x, middle_y), h_grid_counts[3]);
 
 	grid_q->push(bottom_left_grid);
 	grid_q->push(bottom_right_grid);
 	grid_q->push(top_left_grid);
 	grid_q->push(top_right_grid);
-
-	grid_map[id * 4] = bottom_left_grid;
-	grid_map[id * 4 + 1] = bottom_right_grid;
-	grid_map[id * 4 + 2] = top_left_grid;
-	grid_map[id * 4 + 3] = top_right_grid;
 
 	// Free data
 	cudaFreeAsync(d_points, stream);
@@ -197,9 +186,7 @@ void quadtree_grid(Point *points, int count,
 
 Grid *build_quadtree_levels(Point *points, int point_count,
 							queue<Grid *> *grid_q, pair<float, float> bl,
-							pair<float, float> tr, vector<QuadrantBoundary> &boundaries,
-							unordered_map<int, Grid *> &grid_map)
-{
+							pair<float, float> tr) {
 	// According to GPU documentations, 32 is the limit to the number of streams
 	// but performance can not be gauranteed to be better with that many streams
 	// because of the limited number of SMs We limit our streams to 4 right now
@@ -211,10 +198,10 @@ Grid *build_quadtree_levels(Point *points, int point_count,
 
 	queue<Grid *> recursive_grids;
 	Grid *root_grid = new Grid(nullptr, nullptr, nullptr, nullptr, points, tr,
-							   bl, point_count, nullptr, 0);
+							   bl, point_count);
 	recursive_grids.push(root_grid);
-	grid_map[0] = root_grid;
-	quadtree_grid(points, point_count, bl, tr, nullptr, grid_q, nullptr, 0, boundaries, grid_map);
+
+	quadtree_grid(points, point_count, bl, tr, nullptr, grid_q);
 
 	while (!grid_q->empty()) {
 		// start 4 streams at a time, one for each bl, br, tl, tr points
@@ -332,12 +319,9 @@ int main(int argc, char *argv[]) {
 	Point *points_array = (Point *)malloc(point_count * sizeof(Point));
 	for (int i = 0; i < point_count; i++) {
 		points_array[i] = points[i];
-		
 	}
-	vector<QuadrantBoundary> boundaries;
-	unordered_map<int, Grid *> grid_map;
 	Grid *root_grid = build_quadtree_levels(points_array, point_count, &grid_q,
-											root_bl, root_tr, boundaries, grid_map);
+											root_bl, root_tr);
 
 	printf("Validating grid...\n");
 

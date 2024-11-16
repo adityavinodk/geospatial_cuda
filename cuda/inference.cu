@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 #include <vector>
 
 #include "kernels.h"
@@ -24,14 +25,20 @@ using namespace std;
 
 Grid *quadtree_grid(Point *points, int count,
 					pair<float, float> bottom_left_corner,
-					pair<float, float> top_right_corner, int level) {
+					pair<float, float> top_right_corner, int level,
+					Grid *parent, int id, vector<QuadrantBoundary> &boundaries,
+					unordered_map<int, Grid *> &grid_map) {
 	float x1 = bottom_left_corner.fi, y1 = bottom_left_corner.se,
 		  x2 = top_right_corner.fi, y2 = top_right_corner.se;
 
-	if (count < MIN_POINTS or
-		(abs(x1 - x2) < MIN_DISTANCE and abs(y1 - y2) < MIN_DISTANCE)) {
-		return new Grid(nullptr, nullptr, nullptr, nullptr, points,
-						top_right_corner, bottom_left_corner, count);
+	boundaries.push_back({id, bottom_left_corner, top_right_corner});
+
+	if (count < MIN_POINTS ||
+		(abs(x1 - x2) < MIN_DISTANCE && abs(y1 - y2) < MIN_DISTANCE)) {
+		Grid *leaf_grid = new Grid(nullptr, nullptr, nullptr, nullptr, points,
+								   {x2, y2}, {x1, y1}, count, parent, id);
+		grid_map[id] = leaf_grid;  // Insert the grid into the map
+		return leaf_grid;
 	}
 
 	vprint("%d: Creating grid from (%f,%f) to (%f,%f) for %d points\n", level,
@@ -140,22 +147,39 @@ Grid *quadtree_grid(Point *points, int count,
 	cudaFree(top_left);
 	cudaFree(top_right);
 
-	vprint("\n\n");
+	printf("\n\n");
 
+	printf("The current parent id is: %d \n\n", id);
 	// Recursively call the quadtree grid function on each of the 4 sub grids -
 	// bl, br, tl, tr and store in Grid struct
 	Grid *bl_grid, *tl_grid, *br_grid, *tr_grid;
 	bl_grid = quadtree_grid(bl, h_grid_counts[0], bottom_left_corner,
-							mp(middle_x, middle_y), level + 1);
-	br_grid = quadtree_grid(br, h_grid_counts[1], mp(middle_x, y1),
-							mp(x2, middle_y), level + 1);
-	tl_grid = quadtree_grid(tl, h_grid_counts[2], mp(x1, middle_y),
-							mp(middle_x, y2), level + 1);
+							mp(middle_x, middle_y), level + 1, nullptr, id * 4,
+							boundaries, grid_map);
+	br_grid =
+		quadtree_grid(br, h_grid_counts[1], mp(middle_x, y1), mp(x2, middle_y),
+					  level + 1, nullptr, id * 4 + 1, boundaries, grid_map);
+	tl_grid =
+		quadtree_grid(tl, h_grid_counts[2], mp(x1, middle_y), mp(middle_x, y2),
+					  level + 1, nullptr, id * 4 + 2, boundaries, grid_map);
 	tr_grid = quadtree_grid(tr, h_grid_counts[3], mp(middle_x, middle_y),
-							top_right_corner, level + 1);
+							top_right_corner, level + 1, nullptr, id * 4 + 3,
+							boundaries, grid_map);
 
-	return new Grid(bl_grid, br_grid, tl_grid, tr_grid, points,
-					top_right_corner, bottom_left_corner, count);
+	// The bounds of the grid
+	pair<float, float> upperBound = make_pair(x2, y2);
+	pair<float, float> lowerBound = make_pair(x1, y1);
+
+	Grid *root_grid = new Grid(bl_grid, br_grid, tl_grid, tr_grid, points,
+							   upperBound, lowerBound, count, parent, id);
+	grid_map[id] = root_grid;
+
+	if (bl_grid) bl_grid->parent = root_grid;
+	if (br_grid) br_grid->parent = root_grid;
+	if (tl_grid) tl_grid->parent = root_grid;
+	if (tr_grid) tr_grid->parent = root_grid;
+
+	return root_grid;
 }
 
 int main(int argc, char *argv[]) {
@@ -195,12 +219,17 @@ int main(int argc, char *argv[]) {
 	clock_t start, end;
 
 	Point *points_array = (Point *)malloc(point_count * sizeof(Point));
+	vector<QuadrantBoundary> boundaries;
+	unordered_map<int, Grid *> grid_map;  // maintains the grid structure of the
+										  // quadrant of the given quadrant id
+
 	for (int i = 0; i < point_count; i++) {
 		points_array[i] = points[i];
 	}
 	start = clock();
-	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0.0, 0.0),
-									mp(max_size, max_size), 0);
+	Grid *root_grid = quadtree_grid(points_array, point_count, mp(0, 0),
+									mp(max_size, max_size), 0, nullptr, 0,
+									boundaries, grid_map);
 	end = clock();
 
 	time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
@@ -209,12 +238,75 @@ int main(int argc, char *argv[]) {
 	printf("Validating grid...\n");
 	pair<float, float> lower_bound = make_pair(0.0, 0.0);
 	pair<float, float> upper_bound = make_pair(max_size, max_size);
-	bool check = validate_grid(root_grid, upper_bound, lower_bound);
+	bool check = validateGrid(root_grid, upper_bound, lower_bound);
 
 	if (check == true)
 		printf("Grid Verification Success!\n");
 	else
 		printf("Grid Verification Failure!\n");
+
+	vector<Query> queries = {
+		{'s', Point(5000.0, 5000.0)},
+		{'i', Point(9981.0, 9979.0)},
+		{'s', Point(9981.0, 9979.0)},
+		{'s', Point(100.0, 100.0)},
+		{'d', Point(9981.0, 9979.0)},
+		{'s', Point(9981.0, 9979.0)}
+		// Add more queries as needed
+	};
+
+	// Test Search
+	vector<int> results = search_quadrant(queries, boundaries);
+	for (int i = 0; i < results.size(); i++) {
+		printf("\n");
+		printf("The point to be searched (%f, %f) with a quadrant id: %d \n",
+			   queries[i].point.x, queries[i].point.y, results[i]);
+		if (results[i] > 0) {
+			auto it = grid_map.find(results[i]);
+			if (it != grid_map.end()) {
+				Grid *current_grid = it->second;
+				bool found = false;
+				for (int j = 0; j < current_grid->count; j++) {
+					if (current_grid->points[j].x == queries[i].point.x &&
+						current_grid->points[j].y == queries[i].point.y) {
+						found = true;
+						break;
+					}
+				}
+				printf("The type of the query is: %c \n", queries[i].type);
+				switch (queries[i].type) {
+					case 's':
+						if (found)
+							printf("Point found in quadrant with ID: %d\n",
+								   results[i]);
+						else
+							printf("Point not found in the grid.\n");
+						break;
+					case 'i':
+						printf("Inserting a point \n");
+						if (found)
+							printf(
+								"Point already exists in quadrant with ID: "
+								"%d\n",
+								results[i]);
+						else
+							insert_point(queries[i].point, root_grid,
+										 boundaries, grid_map, results[i]);
+						break;
+					case 'd':
+						printf("Deleting a point \n");
+						if (found)
+							delete_point(queries[i].point, root_grid,
+										 boundaries, grid_map, results[i]);
+						else
+							printf("Point does not exist in the grid \n");
+				}
+			} else {
+				printf("Quadrant with ID %d not found in the map.\n",
+					   results[i]);
+			}
+		}
+	}
 
 	return 0;
 }
