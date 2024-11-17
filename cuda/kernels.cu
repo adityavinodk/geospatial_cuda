@@ -307,7 +307,7 @@ __global__ void reorder_points_h_alloc(Point *d_points, Point *grid_points,
 			if (d_points[i].x <= middle_x and d_points[i].y <= middle_y) {
 				first++;
 			}
-			// bottom right; if point lies in bottom right, incremen {}
+			// bottom right; if point lies in bottom right, increment
 			else if (d_points[i].x > middle_x and d_points[i].y <= middle_y) {
 				second++;
 			}

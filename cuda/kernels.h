@@ -128,6 +128,3 @@ Grid *assign_points(GridArray *root_grid, Point *grid_array1,
 void prepare_boundaries(Grid *root_grid, int id, Grid *parent_grid,
 						vector<QuadrantBoundary> &boundaries,
 						unordered_map<int, Grid *> &grid_map);
-
-vector<int> search_quadrant(const vector<Query> &queries,
-							const vector<QuadrantBoundary> &boundaries);

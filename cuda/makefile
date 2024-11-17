@@ -2,6 +2,8 @@
 CC = nvcc
 CFLAGS = -I. -g
 
+all: grid grid_managed grid_opt grid_reorder grid_stream grid_host grid_inference
+
 grid: create_grid.cu kernels.cu
 	$(CC) -o grid create_grid.cu kernels.cu $(CFLAGS)
 
@@ -24,4 +26,10 @@ grid_inference: kernels.cu kernels.cu insert.cpp delete.cpp inference.cu
 	$(CC) -o grid_inference inference.cu kernels.cu insert.cpp delete.cpp $(CFLAGS)
 
 clean:
-	rm -f ./create_grid
+	rm -f ./grid
+	rm -f ./grid_managed
+	rm -f ./grid_opt
+	rm -f ./grid_reorder
+	rm -f ./grid_stream
+	rm -f ./grid_host
+	rm -f ./grid_inference
