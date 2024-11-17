@@ -4,32 +4,13 @@
 
 using namespace std;
 
-void delete_point(Point point_to_delete, Grid *root_grid,
+void delete_point(Point point_to_delete, Grid *target_grid,
 				  vector<QuadrantBoundary> &boundaries,
-				  unordered_map<int, Grid *> &grid_map, int quadrant_id) {
-	// Access the target grid from the unordered map
-	Grid *target_grid = grid_map[quadrant_id];
-
+				  unordered_map<int, Grid *> &grid_map) {
 	// Find and remove the point from the grid
-	bool point_found = false;
 	Point *new_points =
 		(Point *)malloc((target_grid->count - 1) * sizeof(Point));
 	int new_count = 0;
-
-	for (int i = 0; i < target_grid->count; i++) {
-		if (target_grid->points[i].x == point_to_delete.x &&
-			target_grid->points[i].y == point_to_delete.y) {
-			point_found = true;
-		} else {
-			new_points[new_count++] = target_grid->points[i];
-		}
-	}
-
-	if (!point_found) {
-		free(new_points);
-		printf("Point not found in the specified quadrant.\n");
-		return;
-	}
 
 	// Update the grid with the new points
 	free(target_grid->points);
@@ -61,29 +42,31 @@ void delete_point(Point point_to_delete, Grid *root_grid,
 	}
 
 	// Check if the count is less than MIN_POINTS
-	if (target_grid->count < MIN_POINTS && target_grid->bottom_left) {
+	Grid *parent = target_grid->parent;
+	if (parent->count < MIN_POINTS && parent->bottom_left) {
 		printf("Removing child nodes \n");
 		// Remove children nodes
-		delete target_grid->bottom_left;
-		delete target_grid->bottom_right;
-		delete target_grid->top_left;
-		delete target_grid->top_right;
+		delete parent->bottom_left;
+		delete parent->bottom_right;
+		delete parent->top_left;
+		delete parent->top_right;
 
-		target_grid->bottom_left = nullptr;
-		target_grid->bottom_right = nullptr;
-		target_grid->top_left = nullptr;
-		target_grid->top_right = nullptr;
+		parent->bottom_left = nullptr;
+		parent->bottom_right = nullptr;
+		parent->top_left = nullptr;
+		parent->top_right = nullptr;
 
 		// Update boundaries vector
+		int parent_id = parent->id;
 		boundaries.erase(remove_if(boundaries.begin(), boundaries.end(),
-								   [quadrant_id](const QuadrantBoundary &qb) {
-									   return qb.id / 4 == quadrant_id;
+								   [parent_id](const QuadrantBoundary &qb) {
+									   return qb.id / 4 == parent_id;
 								   }),
 						 boundaries.end());
 
 		// Update grid_map
 		for (auto it = grid_map.begin(); it != grid_map.end();) {
-			if (it->first / 4 == quadrant_id && it->first != quadrant_id) {
+			if (it->first / 4 == parent_id && it->first != parent_id) {
 				it = grid_map.erase(it);
 			} else {
 				++it;

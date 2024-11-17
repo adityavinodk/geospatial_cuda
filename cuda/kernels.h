@@ -92,13 +92,12 @@ __global__ void quadrant_search(Query *queries, int num_queries,
 vector<int> search_quadrant(const vector<Query> &queries,
 							const vector<QuadrantBoundary> &boundaries);
 
-void insert_point(Point new_point, Grid *root_grid,
-				  vector<QuadrantBoundary> &boundaries,
-				  unordered_map<int, Grid *> &grid_map, int quadrant_id);
+void insert_point(Point new_point, Grid *target_grid,
+				  vector<QuadrantBoundary> &boundaries);
 
-void delete_point(Point point_to_delete, Grid *root_grid,
+void delete_point(Point point_to_delete, Grid *target_grid,
 				  vector<QuadrantBoundary> &boundaries,
-				  unordered_map<int, Grid *> &grid_map, int quadrant_id);
+				  unordered_map<int, Grid *> &grid_map);
 
 __global__ void reorder_points(Point *d_points, Point *grid_points,
 							   int *grid_counts, int count, int range,

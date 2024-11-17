@@ -151,14 +151,14 @@ int main(int argc, char *argv[]) {
 								"%d\n",
 								results[i]);
 						else
-							insert_point(queries[i].point, root, boundaries,
-										 grid_map, results[i]);
+							insert_point(queries[i].point, grid_map[results[i]],
+										 boundaries);
 						break;
 					case 'd':
 						printf("Deleting a point \n");
 						if (found)
-							delete_point(queries[i].point, root, boundaries,
-										 grid_map, results[i]);
+							delete_point(queries[i].point, grid_map[results[i]],
+										 boundaries, grid_map);
 						else
 							printf("Point does not exist in the grid \n");
 				}
