@@ -1,12 +1,12 @@
 #include <bits/stdc++.h>
-#include <cooperative_groups.h>
 #include <cuda_runtime.h>
 
 #include <unordered_map>
 #include <utility>
 
 using namespace std;
-namespace cg = cooperative_groups;
+
+#define MIN_POINTS 5.0
 
 struct Point {
 	float x, y;
@@ -28,12 +28,12 @@ struct Grid {
 	int id;
 
 	// Grid Dimension
-	std ::pair<float, float> top_right_corner;
-	std ::pair<float, float> bottom_left_corner;
+	pair<float, float> top_right_corner;
+	pair<float, float> bottom_left_corner;
 
 	// Initialize the corresponding Point values
 	Grid(Grid *bl, Grid *br, Grid *tl, Grid *tr, Point *ps,
-		 std ::pair<float, float> uB, std ::pair<float, float> lB, int c)
+		 pair<float, float> uB, pair<float, float> lB, int c)
 		: bottom_left(bl),
 		  bottom_right(br),
 		  top_left(tl),
@@ -46,8 +46,8 @@ struct Grid {
 
 struct QuadrantBoundary {
 	int id;
-	std::pair<float, float> bottom_left;
-	std::pair<float, float> top_right;
+	pair<float, float> bottom_left;
+	pair<float, float> top_right;
 };
 
 struct Query {
@@ -60,8 +60,8 @@ struct GridArray {
 
 	int count, start_pos, grid_array_flag;
 
-	std ::pair<float, float> top_right_corner;
-	std ::pair<float, float> bottom_left_corner;
+	pair<float, float> top_right_corner;
+	pair<float, float> bottom_left_corner;
 
 	GridArray(GridArray *bl, GridArray *br, GridArray *tl, GridArray *tr,
 			  pair<float, float> uB, pair<float, float> lB, int c, int sp,
@@ -89,9 +89,8 @@ __global__ void quadrant_search(Query *queries, int num_queries,
 								QuadrantBoundary *boundaries,
 								int num_boundaries, int *results);
 
-std::vector<int> search_quadrant(
-	const std::vector<Query> &queries,
-	const std::vector<QuadrantBoundary> &boundaries);
+vector<int> search_quadrant(const vector<Query> &queries,
+							const vector<QuadrantBoundary> &boundaries);
 
 void insert_point(Point new_point, Grid *root_grid,
 				  vector<QuadrantBoundary> &boundaries,
@@ -114,13 +113,21 @@ __global__ void reorder_points_h_alloc(Point *d_points_array,
 									   int *d_grid_count);
 
 GridArray *construct_grid_array(Point *d_grid_points0, Point *d_grid_points1,
-						 int count, pair<float, float> bottom_left_corner,
-						 pair<float, float> top_right_corner,
-						 int *h_grid_counts, int *d_grid_counts, int start_pos,
-						 int level, int grid_array_flag);
+								int count,
+								pair<float, float> bottom_left_corner,
+								pair<float, float> top_right_corner,
+								int *h_grid_counts, int *d_grid_counts,
+								int start_pos, int level, int grid_array_flag);
 
 bool validate_grid(Grid *root_grid, pair<float, float> &top_right_corner,
 				   pair<float, float> &bottom_left_corner);
 
 Grid *assign_points(GridArray *root_grid, Point *grid_array1,
 					Point *grid_array2);
+
+void prepare_boundaries(Grid *root_grid, int id, Grid *parent_grid,
+						vector<QuadrantBoundary> &boundaries,
+						unordered_map<int, Grid *> &grid_map);
+
+vector<int> search_quadrant(const vector<Query> &queries,
+							const vector<QuadrantBoundary> &boundaries);

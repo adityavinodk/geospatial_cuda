@@ -1,54 +1,39 @@
 #include <bits/stdc++.h>
 #include <cuda_runtime.h>
+
 #include "kernels.h"
 
 using namespace std;
 
-// Function returns the quadrant id of the given point
-Grid *quadtree_grid(Point *points, int count, pair<float, float> bottom_left_corner,
-                    pair<float, float> top_right_corner, int level,
-                    Grid *parent, int id, vector<QuadrantBoundary> &boundaries,
-                    unordered_map<int, Grid *> &grid_map);
+void insert_point(Point new_point, Grid *root_grid,
+				  vector<QuadrantBoundary> &boundaries,
+				  unordered_map<int, Grid *> &grid_map, int quadrant_id) {
+	// Access the target grid from the unordered map
+	Grid *target_grid = grid_map[quadrant_id];
 
-void insert_point(Point new_point, Grid *root_grid, vector<QuadrantBoundary> &boundaries, unordered_map<int, Grid *> &grid_map, int quadrant_id)
-{
+	// Add the point to the grid
+	Point *new_points =
+		(Point *)malloc((target_grid->count + 1) * sizeof(Point));
+	memcpy(new_points, target_grid->points, target_grid->count * sizeof(Point));
+	new_points[target_grid->count] = new_point;
+	free(target_grid->points);
+	target_grid->points = new_points;
+	target_grid->count++;
 
-    // Access the target grid from the unordered map
-    Grid *target_grid = grid_map[quadrant_id];
+	// Propagate count increment to all parent nodes
+	Grid *parent_grid = target_grid->parent;
+	while (parent_grid) {
+		Point *new_points_parents =
+			(Point *)malloc((parent_grid->count + 1) * sizeof(Point));
+		memcpy(new_points_parents, parent_grid->points,
+			   parent_grid->count * sizeof(Point));
+		new_points_parents[parent_grid->count] = new_point;
 
-    // Add the point to the grid
-    Point *new_points = (Point *)malloc((target_grid->count + 1) * sizeof(Point));
-    memcpy(new_points, target_grid->points, target_grid->count * sizeof(Point));
-    new_points[target_grid->count] = new_point;
-    free(target_grid->points);
-    target_grid->points = new_points;
-    target_grid->count++;
+		free(parent_grid->points);
+		parent_grid->points = new_points_parents;
+		parent_grid->count++;
+		parent_grid = parent_grid->parent;
+	}
 
-    // Propagate count increment to all parent nodes
-    Grid *parent_grid = target_grid->parent;
-    while (parent_grid)
-    {
-        Point *new_points_parents = (Point *)malloc((parent_grid->count + 1) * sizeof(Point));
-        memcpy(new_points_parents, parent_grid->points, parent_grid->count * sizeof(Point));
-        new_points_parents[parent_grid->count] = new_point;
-
-        free(parent_grid->points);
-        parent_grid->points = new_points_parents;
-        parent_grid->count++;
-        parent_grid = parent_grid->parent;
-    }
-
-    // Check if the count exceeds MIN_POINTS; if so, split the quadrant
-    printf("The target grid point count is: %d \n", target_grid->count);
-    if (target_grid->count >= MIN_POINTS)
-    {
-        printf("The target grid exceeds the min point limit and needs to be further subdivided \n\n");
-        vector<QuadrantBoundary> new_boundaries;
-        quadtree_grid(target_grid->points, target_grid->count, target_grid->bottomLeft,
-                      target_grid->topRight, 0, target_grid->parent, quadrant_id, new_boundaries, grid_map);
-
-        // Update the boundaries in the main boundaries vector
-        boundaries.insert(boundaries.end(), new_boundaries.begin(), new_boundaries.end());
-    }
-    printf("Point inserted successfully.\n");
+	printf("Point inserted successfully.\n");
 }

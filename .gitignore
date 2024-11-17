@@ -139,4 +139,5 @@ grid_managed
 grid_host
 grid_reorder
 grid_stream
+grid_inference
 quadtree
