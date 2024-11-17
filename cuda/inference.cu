@@ -250,6 +250,7 @@ int main(int argc, char *argv[]) {
 		{'i', Point(9981.0, 9979.0)},
 		{'s', Point(9981.0, 9979.0)},
 		{'s', Point(100.0, 100.0)},
+		{'n', Point(9981.0, 9979.0)},
 		{'d', Point(9981.0, 9979.0)},
 		{'s', Point(9981.0, 9979.0)}
 		// Add more queries as needed
@@ -300,6 +301,16 @@ int main(int argc, char *argv[]) {
 										 boundaries, grid_map, results[i]);
 						else
 							printf("Point does not exist in the grid \n");
+						break;
+					case 'n':
+						printf("Finding nearest points \n");
+						vector<Point> nearest_points = find_n_nearest_points(queries[i].point, 5, root_grid, boundaries, grid_map);
+						cout << "The " << n << " nearest points to (" << query_point.x << ", " << query_point.y << ") are:" << endl;
+						for (const auto &point : nearest_points)
+						{
+							cout << "(" << point.x << ", " << point.y << ") - Distance: " << distance(query_point, point) << endl;
+						}
+						break;
 				}
 			} else {
 				printf("Quadrant with ID %d not found in the map.\n",
