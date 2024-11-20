@@ -15,18 +15,26 @@ using namespace std;
 #define MIN_POINTS 5.0
 
 int main(int argc, char *argv[]) {
-	if (argc < 3) {
-		std::cerr << "Usage: " << argv[0] << " file_path max_boundary"
+	if (argc < 4) {
+		std::cerr << "Usage: " << argv[0] << " file_path max_boundary queries_file"
 				  << std::endl;
 		return 1;
 	}
 
 	string filename = argv[1];
 	float max_size = atof(argv[2]);
+	string queries_filename = argv[3];
 
 	ifstream file(filename);
 	if (!file) {
 		cerr << "Error: Could not open the file " << filename << endl;
+		return 1;
+	}
+
+	ifstream queries_file(queries_filename);
+	if (!queries_file)
+	{
+		cerr << "Error: Could not open the queries file " << queries_filename << endl;
 		return 1;
 	}
 
@@ -106,15 +114,21 @@ int main(int argc, char *argv[]) {
 
 	prepare_boundaries(root, 0, nullptr, boundaries, grid_map);
 
-	vector<Query> queries = {
-		{'s', Point(637093.0, 90101.0)},
-		{'i', Point(9981.0, 9979.0)},
-		{'s', Point(9981.0, 9979.0)},
-		{'s', Point(100.0, 100.0)},
-		{'d', Point(9981.0, 9979.0)},
-		{'s', Point(9981.0, 9979.0)}
-		// Add more queries as needed
-	};
+	vector<Query> queries;
+	char operation;
+	while (getline(queries_file, line))
+	{
+		istringstream iss(line);
+		if (iss >> operation >> x >> y)
+		{
+			queries.push_back({operation, Point(x, y)});
+		}
+		else
+		{
+			cerr << "Warning: Skipping malformed query: " << line << endl;
+		}
+	}
+	queries_file.close();
 
 	// Test Search
 	vector<int> results = search_quadrant(queries, boundaries);
