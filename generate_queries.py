@@ -1,4 +1,5 @@
 import random
+import sys
 
 def generate_random_queries(filename, num_queries, grid_size=(1e6, 1e6)):
     queries = ['s', 'i', 'd']  # search, insert, delete
@@ -14,9 +15,10 @@ def generate_random_queries(filename, num_queries, grid_size=(1e6, 1e6)):
             file.write(operation + '\n')
 
 def main():
-    max_queries = 100  # Specify how many queries (adjust as needed)
+    max_queries = int(sys.argv[1])  # Specify how many queries (adjust as needed)
     filename = 'queries.txt'
-    grid_size = (1e6, 1e6)  # Maximum grid size
+    boundary = int(sys.argv[2])
+    grid_size = (boundary, boundary)  # Maximum grid size
 
     generate_random_queries(filename, max_queries, grid_size)
     print(f'Generated {max_queries} random queries in {filename}')
