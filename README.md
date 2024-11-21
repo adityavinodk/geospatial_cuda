@@ -12,6 +12,7 @@ In order to construct a Quadtree with the most optimal GPU code -
 1. Run `cd cuda/`
 2. Run `make grid_opt`. This step assumes that you have a GPU connected to your system and have `nvcc` installed 
 3. Run `./grid_opt points_file_path boundary_size`. For example run `./grid_opt ../points.txt 1000000`
+4. In order to run verbose mode, edit line 13 in `kernels.cu` to `true` and rerun steps 2 and 3. This will show the subgrid counts at every layer (please note that this will add to the time taken for quadtree construction)
 
 ## File Heirarchy
 The `cuda/` directory consists of a number of different implementations of quadtree construction code and inferencing. They can be compiled using the makefile. Here are some relevant files - 
