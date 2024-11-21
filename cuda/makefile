@@ -20,9 +20,6 @@ grid_opt: create_grid_opt_v2.cu kernels.cu
 grid_reorder: create_grid_reorder.cu kernels.cu
 	$(CC) -o grid_reorder create_grid_reorder.cu kernels.cu $(CFLAGS)
 
-grid_stream: create_grid_with_stream.cu kernels.cu
-	$(CC) -o grid_stream create_grid_with_stream.cu kernels.cu $(CFLAGS)
-
 grid_host: create_grid_host_alloc.cu kernels.cu
 	$(CC) -o grid_host create_grid_host_alloc.cu kernels.cu $(CFLAGS)
 
@@ -41,7 +38,6 @@ clean:
 	rm -f ./grid_opt_v1
 	rm -f ./grid_opt
 	rm -f ./grid_reorder
-	rm -f ./grid_stream
 	rm -f ./grid_host
 	rm -f ./stream_alloc
 	rm -f ./stream_omp

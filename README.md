@@ -8,10 +8,11 @@ Run `python generate_points.py point_count boundary_size` where `point_count` is
 This will assume that the points will be randomly generated between `(0, 0)` and `(boundary_size, boundary_size)`. The points will be output into a file `points.txt`
 
 ## Run the Quadtree Construction Code
-In order to construct a Quadtree with the most optimal code - 
+In order to construct a Quadtree with the most optimal GPU code - 
 1. Run `cd cuda/`
 2. Run `make grid_opt`. This step assumes that you have a GPU connected to your system and have `nvcc` installed 
 3. Run `./grid_opt points_file_path boundary_size`. For example run `./grid_opt ../points.txt 1000000`
+4. In order to run verbose mode, edit line 13 in `kernels.cu` to `true` and rerun steps 2 and 3. This will show the subgrid counts at every layer (please note that this will add to the time taken for quadtree construction)
 
 ## File Heirarchy
 The `cuda/` directory consists of a number of different implementations of quadtree construction code and inferencing. They can be compiled using the makefile. Here are some relevant files - 
@@ -20,6 +21,7 @@ The `cuda/` directory consists of a number of different implementations of quadt
 3. `inference.cu` - Implementation of running search, insert and delete queries on the Grid structure with kernel for searching boundaries. Compile using `make grid_inference`. 
     - To generate queries, run `python generate_queries num_queries boundary_size`, which will generate a `queries.txt` file 
     - To run the inference, run the following - `./grid_inference points_file boundary_size queries_file`
+4. The code for streams and OpenMP have been implemented as `streams_host_alloc.cu` (compile with `make stream_alloc`) and `streams_omp.cu` (compile with `make stream_omp`) files within the [streams_omp](https://github.com/adityavinodk/geospatial_cuda/tree/streams_omp) branch. This work is still under development.
 
 The `sequential/` directory consists of the code for sequential quadtree construction on CPU (without GPU). This was created mainly for benchmarking purposes and testing performance of the GPU code.
 
